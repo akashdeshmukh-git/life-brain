@@ -338,6 +338,41 @@ def _(pg, ctx):
     pg.click('.line-item:has-text("Work") .line-main'); pg.wait_for_selector('#sheet-root .line-preview')
     check('Ship the side project v1' in pg.inner_text('#sheet-root') and 'Write the project README' in pg.inner_text('#sheet-root'), 'line detail misses its goals or tasks')
 
+@test('Flow', 'Month: each day shows its tasks as line-coloured dots and what became of them; a day opens in detail')
+def _(pg, ctx):
+    open_app(pg)
+    pg.click('.page-head .title-btn'); pg.wait_for_timeout(150)
+    check(ev(pg, '() => LB.route.name') == 'month' and pg.locator('.mday.today').count() == 1, 'the board date does not open the month')
+    y = ev(pg, '() => addDays(today(), -1)'); go(pg, 'month', y[:7])
+    cell = pg.locator(f'.mday[data-date="{y}"]')
+    dots = ev(pg, f"""() => [...document.querySelectorAll('.mday[data-date="{y}"] .mdot')].map(d => d.className.replace('mdot ', ''))""")
+    check(sorted(dots) == ['kept', 'kept', 'missed'] and cell.locator('.mday-score').inner_text() == '2/3', f'yesterday is not shown as 2 of 3 kept: {dots}')
+    cols = ev(pg, f"""() => [...document.querySelectorAll('.mday[data-date="{y}"] .mdot')].map(d => getComputedStyle(d).getPropertyValue('--l').trim())""")
+    check('#2850ad' in cols and '#00933c' in cols, f'dots are not in their line colours (Craft blue, Health green): {cols}')
+    cell.click(); pg.wait_for_selector('#sheet-root .item')
+    txt = pg.inner_text('#sheet-root')
+    check('Kept 2 of 3' in txt and 'Didn’t happen: No time today' in txt and 'took 35m' in txt, f'day detail incomplete: {txt[:300]}')
+    ev(pg, '() => closeSheet()'); sheet_closed(pg)
+    craft = ev(pg, "() => all('area').find(a => a.name === 'Craft').id")
+    pg.click(f'.line-btn[data-action="month-line"][data-id="{craft}"]'); pg.wait_for_timeout(150)
+    check(pg.locator(f'.mday[data-date="{y}"] .mdot').count() == 2 and pg.locator(f'.line-btn[data-id="{craft}"]').get_attribute('aria-pressed') == 'true', 'filtering by a line did not narrow the dots')
+    pg.click(f'.line-btn[data-action="month-line"][data-id="{craft}"]'); pg.wait_for_timeout(150)
+    check('kept' in pg.inner_text('#view').lower() and pg.locator('.section .item').count() >= 2, 'no month summary by line')
+    m = ev(pg, '() => LB.route.sub'); pg.click('[aria-label="Next month"]'); pg.wait_for_timeout(150)
+    check(ev(pg, '() => LB.route.sub') != m and pg.locator('.pill:has-text("Today")').count() == 1, 'month navigation broken')
+
+@test('Flow', 'A task can be put on a line directly, without a goal')
+def _(pg, ctx):
+    open_app(pg)
+    lamp = ev(pg, "() => all('task').find(t => t.title === 'Order a desk lamp').id"); health = ev(pg, "() => all('area').find(a => a.name === 'Health').id")
+    check(ev(pg, f"() => Lines.forTask(data(), get('{lamp}'))") is None, 'lamp should start with no line')
+    ev(pg, f"() => editSheet('task', '{lamp}')"); pg.wait_for_selector('#sheet-root [name="areaId"]')
+    pg.select_option('#sheet-root [name="areaId"]', health); sheet_submit(pg); sheet_closed(pg)
+    check(ev(pg, f"() => Lines.forTask(data(), get('{lamp}')).code") == 'H', 'picked line not used')
+    readme = ev(pg, "() => all('task').find(t => t.title.includes('README')).id")
+    ev(pg, f"async () => {{ await put({{...get('{readme}'), areaId: '{health}'}}); }}")
+    check(ev(pg, f"() => Lines.forTask(data(), get('{readme}')).code") == 'C', 'a goal’s line should win over a picked line')
+
 @test('Flow', 'A past day left open is asked about first; an unknown day is left out, not guessed')
 def _(pg, ctx):
     open_app(pg)
@@ -593,7 +628,7 @@ def _(pg, ctx):
     check(pg.locator('#tabbar [data-to="calendar"]').count() == 0, 'calendar should not be a tab')
     for to in ['today', 'lines', 'brain', 'home']:
         pg.click(f'#tabbar [data-to="{to}"]'); check(ev(pg, '() => LB.route.name') == to, f'tab {to}')
-    for to in ['memory', 'life', 'experiments', 'review', 'settings']:
+    for to in ['month', 'memory', 'life', 'experiments', 'review', 'settings']:
         pg.click('#tabbar [data-action="more"]'); pg.click(f'#sheet-root [data-to="{to}"]'); sheet_closed(pg)
         check(ev(pg, '() => LB.route.name') == to, f'more → {to}')
     pg.set_viewport_size({'width': 1280, 'height': 900}); pg.wait_for_timeout(100)
@@ -948,12 +983,12 @@ def _(pg, ctx):
         r = ev(pg, audit)
         if r['missA'] or r['missF'] or r['dead'] or r['placeholder']: problems.append((label, r))
     ev(pg, "() => { skipOpen = Brain.next(data()).task.id; }")
-    for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('review', ''), ('calendar', ''), ('brain', ''), ('experiments', ''), ('memory', ''), ('settings', '')] + [('life', s) for s in ['direction', 'areas', 'aims', 'goals', 'projects', 'tasks', 'habits']]:
+    for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('month', ''), ('review', ''), ('calendar', ''), ('brain', ''), ('experiments', ''), ('memory', ''), ('settings', '')] + [('life', s) for s in ['direction', 'areas', 'aims', 'goals', 'projects', 'tasks', 'habits']]:
         go(pg, name, sub); pg.wait_for_timeout(150); run(name + '/' + sub)
     ids = ev(pg, "() => ({task: all('task').find(t=>t.status==='open').id, exp: all('experiment')[0].id, f: Brain.analyze(data()).find(f=>f.hypotheses).id})")
     sheets = ["A.more()", f"A['task-done']({{dataset:{{id:'{ids['task']}'}}}})", f"A['task-drop']({{dataset:{{id:'{ids['task']}'}}}})", f"A.finding({{dataset:{{id:'{ids['f']}'}}}})",
               f"openExperiment('{ids['exp']}')", f"A['exp-finish']({{dataset:{{id:'{ids['exp']}'}}}})", "A['brain-analyze']()", "A['brain-decide']()", "A['brain-suggest']()", "A['brain-ask']()",
-              "openClose(addDays(today(), -1))", "openWeek()", "A['line-open']({dataset:{id: all('area')[0].id}})", "lineSheet(get(all('area')[0].id))", "lineSheet(null)", "A['export-text']()", f"firstStepSheet(get('{ids['task']}'))", f"waitingSheet(get('{ids['task']}'))", "goalCheckSheet(all('goal')[0])", "LB.importPreview(validateImport({app:'life-brain',records:[]}))", "LB.importPreview(validateImport({}))", "A['analyze-ai']()"] + [f"editSheet('{t}')" for t in ['area', 'aim', 'goal', 'project', 'task', 'habit', 'event', 'experiment', 'memory']]
+              "openClose(addDays(today(), -1))", "openWeek()", "A['line-open']({dataset:{id: all('area')[0].id}})", "lineSheet(get(all('area')[0].id))", "lineSheet(null)", "A['month-day']({dataset:{date: addDays(today(), -1)}})", "A['month-day']({dataset:{date: addDays(today(), 2)}})", "A['export-text']()", f"firstStepSheet(get('{ids['task']}'))", f"waitingSheet(get('{ids['task']}'))", "goalCheckSheet(all('goal')[0])", "LB.importPreview(validateImport({app:'life-brain',records:[]}))", "LB.importPreview(validateImport({}))", "A['analyze-ai']()"] + [f"editSheet('{t}')" for t in ['area', 'aim', 'goal', 'project', 'task', 'habit', 'event', 'experiment', 'memory']]
     for s in sheets:
         ev(pg, f'() => {{ {s}; }}'); pg.wait_for_timeout(120); run(s); ev(pg, '() => closeSheet()')
     ev(pg, "() => { A['brain-decide'](); }"); pg.fill('#sheet-root [name="question"]', 'Q'); pg.fill('#sheet-root [name="options"]', 'a\nb'); sheet_submit(pg); pg.wait_for_selector('#dec-totals'); run('decision matrix')
@@ -977,7 +1012,7 @@ def _(pg, ctx):
     open_app(pg); bad = []
     for w in [320, 390]:
         pg.set_viewport_size({'width': w, 'height': 800})
-        for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('review', ''), ('calendar', ''), ('brain', ''), ('experiments', ''), ('memory', ''), ('settings', ''), ('life', 'direction'), ('life', 'habits'), ('life', 'tasks')]:
+        for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('month', ''), ('review', ''), ('calendar', ''), ('brain', ''), ('experiments', ''), ('memory', ''), ('settings', ''), ('life', 'direction'), ('life', 'habits'), ('life', 'tasks')]:
             go(pg, name, sub); pg.wait_for_timeout(120)
             sw = ev(pg, '() => document.documentElement.scrollWidth')
             if sw > w: bad.append(f'{name}/{sub}@{w}={sw}')
@@ -993,7 +1028,7 @@ def _(pg, ctx):
     js = """() => { const out = [];
       document.querySelectorAll('input:not([type=hidden]), select, textarea').forEach(el => { if (!(el.closest('label') || el.getAttribute('aria-label') || (el.id && document.querySelector('label[for="'+el.id+'"]')))) out.push(el.outerHTML.slice(0,80)); });
       document.querySelectorAll('button').forEach(b => { if (!(b.textContent.trim() || b.getAttribute('aria-label'))) out.push(b.outerHTML.slice(0,80)); }); return out; }"""
-    for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('review', ''), ('brain', ''), ('settings', ''), ('life', 'direction'), ('life', 'habits'), ('memory', '')]:
+    for name, sub in [('home', ''), ('today', ''), ('lines', ''), ('month', ''), ('review', ''), ('brain', ''), ('settings', ''), ('life', 'direction'), ('life', 'habits'), ('memory', '')]:
         go(pg, name, sub); pg.wait_for_timeout(100); bad += ev(pg, js)
     for t in ['task', 'event', 'experiment']:
         ev(pg, f"() => editSheet('{t}')"); bad += ev(pg, js); ev(pg, '() => closeSheet()')

@@ -45,7 +45,7 @@ VIEWS.home = () => {
 function boardHead(D, t, notices, cols) {
   const lines = Lines.all(D).map((a) => Lines.of(D, a));
   return `<header class="page-head board-top">${exampleStrip()}
-    <div class="head-row"><h1 class="page-title">${fmtDate(t, { weekday: 'long', month: 'short', day: 'numeric' })}</h1><button class="icon-btn round" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div>
+    <div class="head-row"><h1 class="page-title"><button class="title-btn" data-action="nav" data-to="month" aria-label="${fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })}, open the month">${fmtDate(t, { weekday: 'long', month: 'short', day: 'numeric' })}${icon('down')}</button></h1><button class="icon-btn round" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div>
     ${offlineTag() ? `<div class="eyebrow">${offlineTag()}</div>` : ''}
     <div class="line-row">${lines.map((L) => `<button class="line-btn" data-action="line-open" data-id="${L.id}" aria-label="${esc(L.name)} line">${lineBullet(L)}</button>`).join('')}
       ${notices ? `<button class="pill" data-action="notices-jump"><span class="diamond" aria-hidden="true"></span>${plural(notices, 'notice')}</button>` : ''}</div>

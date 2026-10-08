@@ -63,6 +63,10 @@ The app is styled after Day Board, a calendar built like New York subway signage
 
 **The board.** Today's plan reads like departures: each task, the time it would start if you go in order, and how long until then. Tap **Start** when you begin one. It becomes the yellow LIVE row, with minutes left and a progress bar. When you tap Done, the app records how long it really took, so the "took about" step in the evening isn't needed.
 
+**Month.** Tap the date at the top of the Board to see the month. Each day shows a dot per task in its line's colour: filled if it happened, a ring if it didn't, a faint ring if it's still planned. Closed days show how many you kept, like 2/3. Tap a line's bullet to show only that line, or tap a day to see what happened and why. Below the grid you get the month's kept rate by line, and, once there are enough closed days, which weekdays your plans hold up on.
+
+A task normally gets its line from its goal. You can also pick a line for it directly in the task's edit screen.
+
 **Highlight.** Yellow is the one highlight colour, used for the live row, the current tab and your picks. Settings offers six others.
 
 Inter is a free font under the SIL Open Font License. It's built into the app, and its licence is in `licenses` and `source/src/fonts`.

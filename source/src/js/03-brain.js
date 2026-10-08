@@ -74,7 +74,8 @@ Brain.chain = (D, x) => {
   const p = (x.projectId && D.projects.find((q) => q.id === x.projectId)) || null;
   const g = Brain.goalOf(D, x);
   const aim = (g && g.aimId && D.aims.find((a) => a.id === g.aimId)) || null;
-  const area = (g && D.areas.find((a) => a.id === (g.areaId || (aim && aim.areaId)))) || null;
+  // A task's line comes from its goal's area; a line picked on the task itself is used when the goal has none.
+  const area = (g && D.areas.find((a) => a.id === (g.areaId || (aim && aim.areaId)))) || (x.areaId && D.areas.find((a) => a.id === x.areaId)) || null;
   const areaLabel = area ? `${area.emoji || ''} ${area.name}`.trim() : '';
   // head: the most meaningful "for": goal first, else project. rest: what it ladders up to.
   const headLabel = g ? g.title : p ? p.title : '';
