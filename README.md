@@ -49,7 +49,7 @@ Recognised automatically: OpenRouter (`sk-or-`), Anthropic (`sk-ant-`), Google G
 
 Titles, your direction statement and the brand are set in **Neurath X** by René Bieder. It is a paid font, so it is not included. Until you add it, those places use Inter, the app's Helvetica-style face.
 
-1. Buy a **web font licence** for Neurath X on MyFonts (Regular, SemiBold and Bold are the weights used). The licence covers one domain, such as `YOUR-USERNAME.github.io`.
+1. Buy a **web font licence** for Neurath X on MyFonts (Regular, SemiBold and Bold are the weights used). The licence covers one domain, such as `akashdeshmukh-git.github.io`.
 2. Rename the `.woff2` files to `NeurathX-Regular.woff2`, `NeurathX-SemiBold.woff2` and `NeurathX-Bold.woff2`.
 3. Put them in a folder called `fonts` next to `index.html` and upload it with the rest.
 
