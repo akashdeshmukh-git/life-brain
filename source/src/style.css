@@ -567,3 +567,36 @@ button.item + .item::before, .item + button.item::before { left: 1rem; right: 0;
   :root { --sep: #9a978f; --label-2: #3a3a3c; --edge: #8d8a82; }
   :root[data-mode="black"] { --sep: #5a5a5e; --label-2: #c7c7cc; --edge: #5a5a5e; }
 }
+
+/* ---------- Month: a record of your days ---------- */
+.title-btn { appearance: none; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: .35rem; text-align: left; }
+.title-btn svg { width: 1.1rem; height: 1.1rem; color: var(--sign-muted); }
+.title-btn:active { opacity: .7; }
+.line-btn.dim .bullet { opacity: .3; }
+.line-btn[aria-pressed="true"] .bullet { box-shadow: 0 0 0 2px var(--sign), 0 0 0 4px var(--sign-fg); }
+.mgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-inline: -1rem; }
+.mdows { margin: 1rem 0 0; }
+.mdows span { text-align: center; font-size: .625rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--sign-muted); }
+.page-head + .mgrid { margin-top: -1.1rem; }
+.mday {
+  appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; position: relative;
+  min-height: 4.9rem; padding: .4rem .1rem .45rem; border-bottom: 1px solid var(--sep);
+  display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: .3rem;
+}
+.mday:active { background: var(--press); }
+.mday.out { opacity: .35; }
+.mday-n { width: 1.75rem; height: 1.75rem; border-radius: 50%; display: grid; place-items: center; font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mday.today .mday-n { background: var(--accent); color: var(--on-accent); }
+.mday-dots { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 3px; max-width: 2.7rem; }
+.mday-dots b { font-size: .625rem; line-height: 7px; color: var(--muted); }
+.mdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--l, #8e8e93); flex: none; }
+.mdot.missed { background: transparent; box-shadow: inset 0 0 0 1.5px var(--l, #8e8e93); }
+.mdot.planned { background: transparent; box-shadow: inset 0 0 0 1.5px var(--l, #8e8e93); opacity: .55; }
+.mdot.extra { border-radius: 2px; }
+.mday-score { font-size: .625rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.mday.all .mday-score { color: var(--good); }
+.mday-score.open { color: var(--accent-ink); text-transform: uppercase; letter-spacing: .06em; font-size: .5625rem; }
+.mday-ev { position: absolute; top: .35rem; right: .3rem; width: .45rem; height: .45rem; transform: rotate(45deg); background: var(--accent); font-size: 0; }
+.mlegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .8rem; }
+.mlegend span { display: inline-flex; align-items: center; gap: .4rem; }
+.mlegend .mdot { --l: var(--fg); }

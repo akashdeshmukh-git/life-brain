@@ -1,6 +1,6 @@
 # Life Brain test report
 
-Automated browser tests (Chromium, Playwright) against the final build. 60 of 60 passed.
+Automated browser tests (Chromium, Playwright) against the final build. 62 of 62 passed.
 
 ## Unit
 
@@ -21,6 +21,8 @@ Automated browser tests (Chromium, Playwright) against the final build. 60 of 60
 - **PASSED** Day loop: commit a plan, tick it off, close the day with reasons; misses move on
 - **PASSED** Start makes a task live: yellow row counts down, Done records how long it really took
 - **PASSED** Lines: each life area is a line with a letter and colour; editing it changes every bullet
+- **PASSED** Month: each day shows its tasks as line-coloured dots and what became of them; a day opens in detail
+- **PASSED** A task can be put on a line directly, without a goal
 - **PASSED** A past day left open is asked about first; an unknown day is left out, not guessed
 - **PASSED** Weekly review: the gap and its reasons; one experiment that changes plans; kept, it becomes a rule
 - **PASSED** Now: blind-spot actions work, Not useful hides them, Not now asks why, quick add

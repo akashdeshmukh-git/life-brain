@@ -32,6 +32,7 @@ const NAV = [
   { id: 'today', label: 'Tasks', icon: 'tasks', tab: true },
   { id: 'lines', label: 'Lines', icon: 'lines', tab: true },
   { id: 'brain', label: 'Brain', icon: 'brain', tab: true },
+  { id: 'month', label: 'Month', icon: 'calendar' },
   { id: 'memory', label: 'Memory', icon: 'book' },
   { id: 'life', label: 'Life Model', icon: 'life' },
   { id: 'experiments', label: 'Experiments', icon: 'flask' },
@@ -61,7 +62,7 @@ function renderNav() {
   $('#tabbar').innerHTML = NAV.filter((n) => n.tab).map((n) => `<button class="tab" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></button>`).join('')
     + `<button class="tab" data-action="more" ${inMore ? 'aria-current="page"' : ''}>${icon('more')}<span>More</span></button>`;
   $('#side').innerHTML = `<div class="brand"><img class="brand-mark" src="${LB.LOGO}" alt="" width="34" height="34">Life Brain</div>`
-    + NAV.map((n, i) => (i === 4 || i === 8 ? '<div class="side-sep"></div>' : '') + `<button class="side-link" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}>${icon(n.icon)}${n.label}</button>`).join('');
+    + NAV.map((n, i) => (i === 4 || i === 9 ? '<div class="side-sep"></div>' : '') + `<button class="side-link" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}>${icon(n.icon)}${n.label}</button>`).join('');
 }
 let lastRoute = '';
 function render(focus) {
@@ -381,7 +382,7 @@ const ENT = {
   aim: { label: 'Long-term aim', fields: [['title', 'Aim', 'text', { req: 1, ph: 'Stay strong into my 60s' }], ['areaId', 'Life area', 'ref:area'], ['note', 'Why it matters', 'area']] },
   goal: { label: 'Goal', fields: [['title', 'Goal', 'text', { req: 1 }], ['aimId', 'Long-term aim', 'ref:aim'], ['areaId', 'Life area', 'ref:area'], ['measure', 'How you’ll know it’s done', 'text'], ['due', 'Target date', 'date'], ['status', 'Status', 'select', { options: STATUS.goal, def: 'active' }], ['why', 'Why this goal', 'area']] },
   project: { label: 'Project', fields: [['title', 'Project', 'text', { req: 1 }], ['goalId', 'Goal', 'ref:goal'], ['status', 'Status', 'select', { options: STATUS.project, def: 'active' }], ['note', 'Notes', 'area']] },
-  task: { label: 'Task', fields: [['title', 'Task', 'text', { req: 1 }], ['projectId', 'Project', 'ref:project'], ['goalId', 'Goal (if no project)', 'ref:goal'],
+  task: { label: 'Task', fields: [['title', 'Task', 'text', { req: 1 }], ['areaId', 'Line', 'ref:area', { hint: 'The part of your life it belongs to. A goal’s line wins if the task has one.' }], ['projectId', 'Project', 'ref:project'], ['goalId', 'Goal (if no project)', 'ref:goal'],
     ['priority', 'Priority', 'select', { options: [['1', 'High'], ['2', 'Medium'], ['3', 'Low']], def: '2' }], ['estimateMin', 'Estimate (minutes)', 'number', { maxNum: 1440, step: 5 }],
     ['plannedDate', 'Planned for', 'date'], ['firstStep', 'First step', 'text', { ph: 'Open the doc and write one sentence' }], ['context', 'Context', 'text', { ph: 'At desk, needs laptop' }], ['why', 'Why it matters', 'area']] },
   habit: { label: 'Habit', fields: [['emoji', 'Emoji', 'text', { max: 8, ph: '🚶' }], ['title', 'Habit', 'text', { req: 1 }], ['areaId', 'Life area', 'ref:area'], ['perWeek', 'Target days per week', 'number', { min: 1, maxNum: 7 }]] },
