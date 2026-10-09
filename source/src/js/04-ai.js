@@ -186,19 +186,21 @@ function askAI() {
   if (prov === 'none') { go('settings', 'ai'); toast('Add an API key first. Any service works.'); return; }
   const state = { scopes: Object.keys(SCOPES).filter((k) => SCOPES[k].on), q: QUESTION };
   const payload = () => `${buildContext(state.scopes)}\n\n## Question\n${state.q}`;
-  openSheet({ title: 'Ask AI', body: `
-    <label class="field"><span>Your question</span><textarea id="ai-q" rows="3" maxlength="1000">${esc(state.q)}</textarea></label>
-    <div class="field"><span>Share</span><div class="checks">${Object.entries(SCOPES).map(([k, s]) => `<label class="check"><input type="checkbox" data-scope="${k}" ${state.scopes.includes(k) ? 'checked' : ''}> ${esc(s.label)}</label>`).join('')}</div></div>
-    <details class="preview-box"><summary>See exactly what will be sent <span class="muted" id="ai-size"></span></summary><pre class="preview" id="ai-preview"></pre></details>
-    <p class="hint">Goes only to <b>${esc(AI.providerName(prov))}</b>. Nothing leaves your phone until you press Send.</p>
-    <div class="row-end"><button class="btn" data-action="sheet-close">Cancel</button><button class="btn primary" id="ai-send">Send</button></div>
-    <div id="ai-result"></div>`,
+  openSheet({ title: 'What your AI sees', body: `
+    <div id="ai-result"></div>
+    <div class="row-end tool-row"><button class="btn" data-action="sheet-close">Close</button><button class="btn" id="ai-send">Ask again</button></div>
+    <details class="preview-box"><summary>Change the question or what is shared</summary>
+      <label class="field"><span>Your question</span><textarea id="ai-q" rows="3" maxlength="1000">${esc(state.q)}</textarea></label>
+      <div class="field"><span>Share</span><div class="checks">${Object.entries(SCOPES).map(([k, s]) => `<label class="check"><input type="checkbox" data-scope="${k}" ${state.scopes.includes(k) ? 'checked' : ''}> ${esc(s.label)}</label>`).join('')}</div></div>
+      <p class="hint">Then tap Ask again.</p></details>
+    <details class="preview-box"><summary>See what is sent to ${esc(AI.providerName(prov))} <span class="muted" id="ai-size"></span></summary><pre class="preview" id="ai-preview"></pre></details>`,
   onMount(root) {
     const refresh = () => { const p = payload(); $('#ai-preview', root).textContent = SYSTEM_PROMPT + '\n\n' + p; $('#ai-size', root).textContent = `· ${(SYSTEM_PROMPT.length + p.length).toLocaleString()} characters`; };
     refresh();
     root.addEventListener('change', (ev) => { const k = ev.target.dataset.scope; if (k) { state.scopes = ev.target.checked ? [...state.scopes, k] : state.scopes.filter((s) => s !== k); refresh(); } });
     $('#ai-q', root).addEventListener('input', (ev) => { state.q = ev.target.value.trim() || QUESTION; refresh(); });
     $('#ai-send', root).addEventListener('click', () => runAI(root, payload()));
+    runAI(root, payload()); // one tap: it starts right away
   } });
 }
 LB.askAI = askAI;
@@ -220,5 +222,5 @@ async function runAI(root, user) {
     });
   } catch (e) {
     out.innerHTML = `<div class="ai-out"><p class="err" id="ai-error" data-code="${esc(e.code || 'error')}">${esc(e.message || 'Something went wrong.')}</p></div>`;
-  } finally { send.disabled = false; send.textContent = 'Send again'; }
+  } finally { send.disabled = false; send.textContent = 'Ask again'; }
 }

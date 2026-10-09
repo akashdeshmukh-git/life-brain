@@ -19,7 +19,7 @@ Settings (last in the menu) has your name, the theme (Auto, Light, Dark), the ac
 
 ## AI
 
-Every AI feature is a button. Each one shows exactly what will be sent before it sends, and anything it suggests changing is listed with tick boxes, so nothing changes until you check it. One Undo reverses the lot.
+Every ✦ button works in one tap: it asks your AI straight away and shows the answer. Anything it suggests changing is listed with tick boxes, so nothing changes until you tap Apply or Add, and one Undo reverses the lot. Each sheet has **See what is sent** if you want to check exactly what left the phone. With Automatic on, a button opens the suggestion your AI already prepared instead of asking again.
 
 - **Organise** (in a note): turns a brain dump into tasks, events, habits and goals.
 - **Break down** (in a task): 3 to 6 small steps with dates, never past the task's due date. It can replace the big task.

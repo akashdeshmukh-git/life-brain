@@ -1,6 +1,6 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **48 of 48 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **49 of 49 PASSED**.
 
 AI calls were tested against a local mock service, including Organise, the six AI tools and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans or sorts is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
@@ -33,6 +33,7 @@ AI calls were tested against a local mock service, including Organise, the six A
 | AI tools | Sort out overdue: do today, move, split and delete each work; unknown actions are left alone | PASSED |
 | AI tools | Home line: one sentence about today, kept until tomorrow; Weekly look back saves as a note | PASSED |
 | AI tools | Ask your notes: needs a question, sends numbered notes, answer links to the notes it used | PASSED |
+| AI tools | One tap runs: no second Send step, and with Automatic on a prepared suggestion opens instead of asking again | PASSED |
 | AI tools | Every AI button without a key goes to Settings instead of failing | PASSED |
 | Automatic | Off by default: opening the app sends nothing, even with a key kept on the phone | PASSED |
 | Automatic | Switched on: a line about today and overdue ideas appear by themselves; applying needs one tap; it runs once a day | PASSED |

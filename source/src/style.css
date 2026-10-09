@@ -371,3 +371,6 @@ details > summary::-webkit-details-marker { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .auto-parts { margin: 4px 0 8px 30px; }
 .auto-parts .check { font-size: 14px; min-height: 36px; }
+
+.tool-row { margin-top: 12px; }
+#tool-result:empty + .tool-row, #org-result:empty + .tool-row, #ai-result:empty + .tool-row { margin-top: 4px; }

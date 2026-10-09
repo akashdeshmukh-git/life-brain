@@ -23,18 +23,21 @@ const eventLine = (e) => `${e.date}${e.time ? ' ' + e.time + (e.end ? '-' + e.en
 
 /* One sheet for every tool: intro, optional extra fields, the exact request, Send, then the result. */
 const TOOL = { ctl: null };
-function aiTool({ title, intro, system, request, extra = '', sendLabel = 'Send', onAnswer, validate }) {
+/* One tap runs it: the sheet opens already asking. A tool that needs a question waits for you to type one. */
+function aiTool({ title, intro, system, request, extra = '', sendLabel = 'Ask again', onAnswer, validate }) {
   if (!needAI()) return;
   const prov = AI.provider();
   openSheet({ title, body: `<p class="small">${intro}</p>${extra}
-    <details class="preview-box"><summary>See exactly what will be sent</summary><pre class="preview" id="tool-preview"></pre></details>
-    <p class="hint">Goes only to <b>${esc(AI.providerName(prov))}</b>. Nothing changes until you say so.</p>
-    <div class="row-end"><button class="btn" data-action="sheet-close">Cancel</button><button class="btn primary" id="tool-send">${esc(sendLabel)}</button></div>
-    <div id="tool-result"></div>`,
+    <div id="tool-result"></div>
+    <div class="row-end tool-row"><button class="btn" data-action="sheet-close">Close</button><button class="btn" id="tool-send">${esc(validate ? 'Ask' : sendLabel)}</button></div>
+    <details class="preview-box"><summary>See what is sent to ${esc(AI.providerName(prov))}</summary><pre class="preview" id="tool-preview"></pre></details>`,
   onMount(root) {
     const refresh = () => { $('#tool-preview', root).textContent = system + '\n\n' + request(root); };
     refresh();
     root.addEventListener('input', (ev) => { if (ev.target.dataset && 'toolField' in ev.target.dataset) refresh(); });
+    root.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.dataset && 'toolField' in ev.target.dataset) { ev.preventDefault(); $('#tool-send', root).click(); } });
+    if (!validate) setTimeout(() => { const b = $('#tool-send', root); if (b && document.contains(b)) b.click(); }, 0);
+    else { const f = $('[data-tool-field]', root); if (f) f.focus(); }
     $('#tool-send', root).addEventListener('click', async () => {
       const out = $('#tool-result', root), send = $('#tool-send', root);
       const problem = validate && validate(root);
@@ -48,7 +51,7 @@ function aiTool({ title, intro, system, request, extra = '', sendLabel = 'Send',
         await onAnswer(text, out, root);
       } catch (e) {
         if (document.contains(out)) out.innerHTML = `<div class="ai-out"><p class="err" id="tool-error" data-code="${esc(e.code || 'error')}">${esc(e.message || 'Something went wrong.')}</p></div>`;
-      } finally { if (document.contains(send)) { send.disabled = false; send.textContent = 'Ask again'; } }
+      } finally { if (document.contains(send)) { send.disabled = false; send.textContent = validate ? 'Ask' : 'Ask again'; } }
     });
   } });
 }
@@ -207,6 +210,8 @@ function reviewSpec(spec, out, rows, note = '') {
 }
 const specButton = (key, intro, empty) => () => {
   const spec = SPECS[key], t = today();
+  const ready = pendingList().find((p) => p.kind === key && (p.rows || []).some(spec.still));
+  if (ready) { A['pending-open']({ dataset: { id: ready.id } }); return; } // your AI already prepared this
   if (!spec.ready(data(), t)) { toast(empty); return; }
   aiTool({ title: spec.title, intro: intro(), system: spec.system, request: () => spec.request(t),
     onAnswer: (text, out) => { const r = spec.parse(text, t); reviewSpec(spec, out, r.rows, r.note); } });
