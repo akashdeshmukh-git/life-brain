@@ -1,8 +1,8 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **43 of 43 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **48 of 48 PASSED**.
 
-AI calls were tested against a local mock service, including Organise and the six AI tools. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans or sorts is untested. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
+AI calls were tested against a local mock service, including Organise, the six AI tools and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans or sorts is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
 | Area | Test | Result |
 |---|---|---|
@@ -34,6 +34,11 @@ AI calls were tested against a local mock service, including Organise and the si
 | AI tools | Home line: one sentence about today, kept until tomorrow; Weekly look back saves as a note | PASSED |
 | AI tools | Ask your notes: needs a question, sends numbered notes, answer links to the notes it used | PASSED |
 | AI tools | Every AI button without a key goes to Settings instead of failing | PASSED |
+| Automatic | Off by default: opening the app sends nothing, even with a key kept on the phone | PASSED |
+| Automatic | Switched on: a line about today and overdue ideas appear by themselves; applying needs one tap; it runs once a day | PASSED |
+| Automatic | Closing a note organises it in the background; the suggestions wait on Home; unchanged notes are not sent again | PASSED |
+| Automatic | On a Monday: weekly look back saved to Notes and a plan for the week waiting to check | PASSED |
+| Automatic | Settings warns when the key is not kept, and shows a failed run plainly | PASSED |
 | AI | Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error | PASSED |
 | AI | Paste a key: the service is recognised, checked, and a model chosen | PASSED |
 | Data | Export then import (add and replace) round-trips everything | PASSED |

@@ -249,6 +249,7 @@ function closeSheet(velocity = 0) {
     document.body.style.overflow = '';
     if (SH.lastFocus && document.contains(SH.lastFocus)) SH.lastFocus.focus({ preventScroll: true });
     emit(); // anything saved quietly while the sheet was open now shows on the screen
+    const after = (LB.sheetClosed || []).splice(0); after.forEach((f) => settle(f).catch(() => {})); // e.g. organise a note you just closed
   };
   if (reduceMotion()) { SH.wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease-in', fill: 'forwards' }).onfinish = finish; return; }
   if (SH.dialog) { SH.eps = 0.002; springTo(SH, 0, { damping: 1, response: 0.25 }, sheetApply, finish); return; }

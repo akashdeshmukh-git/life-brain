@@ -57,7 +57,7 @@ A['tool-stop'] = () => { if (TOOL.ctl) TOOL.ctl.abort(); };
 /* A list of suggested changes, each with a tick box and editable fields. rows: [{ on, ...fields }]. */
 const REV = { rows: [], row: null, apply: null, label: 'Apply' };
 function showReview(out, rows, row, apply, label = 'Apply') {
-  Object.assign(REV, { rows, row, apply, label, out });
+  Object.assign(REV, { rows, row, apply, label, out, after: null });
   drawReview();
 }
 function drawReview() {
@@ -88,6 +88,7 @@ A['rev-apply'] = async () => {
     async remove(id) { const old = get(id); if (!old) return; await del(id); undo.push(() => put(old)); },
   };
   const msg = await REV.apply(REV.rows.filter((r) => r.on), rec);
+  if (REV.after) await REV.after();
   closeSheet(); emit();
   toast(msg || 'Done', '', { action: 'Undo', onAction: async () => { for (const f of undo.reverse()) await f(); } });
 };
@@ -120,6 +121,10 @@ A['task-break'] = (el) => {
     } });
 };
 
+/* Review "specs": how to ask, how to read the answer into rows, how to draw a row, how to apply.
+   The same spec serves the button (ask now) and the automatic run (asked earlier, waiting for you). */
+const SPECS = {};
+
 /* ---- 2. Plan my week ---- */
 const PLAN_PROMPT = `You plan one person's next 7 days. You get their open tasks (each with an id), their calendar, and how many tasks they really finish per day. Reply with JSON only, in this shape:
 {"plan":[{"id":"...","date":"YYYY-MM-DD or empty"}],"note":"one short sentence about the week"}
@@ -128,28 +133,27 @@ Rules:
 - Don't put more tasks on a day than they usually finish (round up), and fewer on days with several events.
 - Never schedule a task after its due date. Overdue tasks go early in the week or are left unscheduled.
 - Spread similar tasks out. Don't schedule everything: a realistic week beats a full one.`;
-A['plan-week'] = () => {
-  const t = today();
-  const build = () => {
-    const D = data(), open = D.tasks.filter((x) => !x.done && (!x.date || x.date <= addDays(t, 6))).slice(0, 60);
-    const evs = D.events.filter((e) => e.date >= t && e.date <= addDays(t, 6)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-    return { open, text: `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(D, t)} tasks a day (last 14 days).\n\n## Open tasks\n${open.map((x) => taskLine(x, t)).join('\n') || '(none)'}\n\n## Calendar, next 7 days\n${evs.map(eventLine).join('\n') || '(nothing)'}` };
-  };
-  if (!build().open.length) { toast('No open tasks to plan.'); return; }
-  aiTool({ title: 'Plan my week', intro: 'The AI spreads your open tasks over the next 7 days, sized to what you usually finish. You check every move.', system: PLAN_PROMPT,
-    request: () => build().text,
-    onAnswer: (text, out) => {
-      const j = pullJSON(text), rows = [];
-      for (const p of Array.isArray(j.plan) ? j.plan : []) {
-        const x = p && get(String(p.id)); if (!x || x.type !== 'task' || x.done) continue;
-        let d = day(p.date); if (d && (d < t || d > addDays(t, 6))) d = ''; if (d && x.date && x.date >= t && d > x.date) d = x.date;
-        if (d === (x.date || '') || rows.some((r) => r.id === x.id)) continue;
-        rows.push({ on: true, id: x.id, title: x.title, from: x.date || '', date: d });
-      }
-      showReview(out, rows, (r, i) => `<span class="rev-note">${esc(r.title)}</span><div class="org-when"><span class="small muted">${r.from ? esc(relDate(r.from)) : 'No date'} →</span>${dateField(i, r.date)}</div>`,
-        async (sel, rec) => { for (const r of sel) { const x = get(r.id); if (x) await rec.update({ ...x, date: day(r.date) }); } return `Planned ${plural(sel.length, 'task')}`; }, 'Apply');
-      if (j.note && rows.length) $('#rev-list').insertAdjacentHTML('beforebegin', `<p class="small" id="plan-note">${esc(trunc(String(j.note), 200))}</p>`);
-    } });
+const planOpen = (D, t) => D.tasks.filter((x) => !x.done && (!x.date || x.date <= addDays(t, 6))).slice(0, 60);
+SPECS.plan = {
+  title: 'Plan my week', label: 'Apply', system: PLAN_PROMPT,
+  ready: (D, t) => planOpen(D, t).length > 0,
+  request: (t) => {
+    const D = data(), evs = D.events.filter((e) => e.date >= t && e.date <= addDays(t, 6)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(D, t)} tasks a day (last 14 days).\n\n## Open tasks\n${planOpen(D, t).map((x) => taskLine(x, t)).join('\n') || '(none)'}\n\n## Calendar, next 7 days\n${evs.map(eventLine).join('\n') || '(nothing)'}`;
+  },
+  parse: (text, t) => {
+    const j = pullJSON(text), rows = [];
+    for (const p of Array.isArray(j.plan) ? j.plan : []) {
+      const x = p && get(String(p.id)); if (!x || x.type !== 'task' || x.done) continue;
+      let d = day(p.date); if (d && (d < t || d > addDays(t, 6))) d = ''; if (d && x.date && x.date >= t && d > x.date) d = x.date;
+      if (d === (x.date || '') || rows.some((r) => r.id === x.id)) continue;
+      rows.push({ on: true, id: x.id, title: x.title, from: x.date || '', date: d });
+    }
+    return { rows, note: j.note ? trunc(String(j.note), 200) : '' };
+  },
+  still: (r) => { const x = get(r.id); return !!x && !x.done; },
+  row: (r, i) => `<span class="rev-note">${esc(r.title)}</span><div class="org-when"><span class="small muted">${r.from ? esc(relDate(r.from)) : 'No date'} →</span>${dateField(i, r.date)}</div>`,
+  apply: async (sel, rec) => { for (const r of sel) { const x = get(r.id); if (x) await rec.update({ ...x, date: day(r.date) }); } return `Planned ${plural(sel.length, 'task')}`; },
 };
 
 /* ---- 3. Clear the overdue pile ---- */
@@ -159,78 +163,93 @@ Reply with JSON only, in this shape:
 {"actions":[{"id":"...","action":"today|move|split|drop","date":"YYYY-MM-DD or empty","steps":["..."],"why":"under 12 words"}]}
 Rules: no more than 3 tasks on today. Tasks moved many times are good candidates for split or drop. Only use the ids given.`;
 const ACTIONS = { today: 'Do today', move: 'Move', split: 'Split', drop: 'Delete', keep: 'Leave as is' };
-A['overdue-sort'] = () => {
-  const t = today(), over = () => data().tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 40);
-  if (!over().length) { toast('Nothing is overdue.'); return; }
-  aiTool({ title: 'Sort out overdue', intro: `The AI suggests what to do with each of your ${plural(over().length, 'overdue task')}: do today, move, split or delete. You decide.`, system: OVERDUE_PROMPT,
-    request: () => `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(data(), t)} tasks a day.\n\n## Overdue tasks\n${over().map((x) => taskLine(x, t)).join('\n')}`,
-    onAnswer: (text, out) => {
-      const j = pullJSON(text), rows = [];
-      for (const a of Array.isArray(j.actions) ? j.actions : []) {
-        const x = a && get(String(a.id)); if (!x || !isOverdue(x, t) || rows.some((r) => r.id === x.id)) continue;
-        const action = ACTIONS[a.action] ? a.action : 'keep';
-        const steps = (Array.isArray(a.steps) ? a.steps : []).map((s) => String(s || '').trim().slice(0, 200)).filter(Boolean).slice(0, 4);
-        rows.push({ on: action !== 'keep', id: x.id, title: x.title, action: action === 'split' && !steps.length ? 'keep' : action, date: day(a.date) > t ? day(a.date) : addDays(t, 1), steps: steps.join('\n'), why: String(a.why || '').slice(0, 120) });
-      }
-      showReview(out, rows, (r, i) => `<span class="rev-note">${esc(r.title)}</span><div class="org-when"><select data-rev="action" data-i="${i}" aria-label="What to do">${Object.entries(ACTIONS).map(([k, l]) => `<option value="${k}" ${r.action === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        ${r.action === 'move' ? dateField(i, r.date) : ''}</div>${r.action === 'split' ? `<textarea class="rev-steps" data-rev="steps" data-i="${i}" rows="3" aria-label="Steps, one per line">${esc(r.steps)}</textarea>` : ''}${r.why ? `<span class="small muted">${esc(r.why)}</span>` : ''}`,
-      async (sel, rec) => {
-        let n = 0;
-        for (const r of sel) {
-          const x = get(r.id); if (!x) continue;
-          if (r.action === 'today') await rec.update({ ...x, date: t, moved: (x.moved || 0) + 1 });
-          else if (r.action === 'move' && day(r.date)) await rec.update({ ...x, date: r.date, moved: (x.moved || 0) + 1 });
-          else if (r.action === 'drop') await rec.remove(x.id);
-          else if (r.action === 'split') {
-            const steps = String(r.steps).split('\n').map((s) => s.trim()).filter(Boolean);
-            if (!steps.length) continue;
-            for (const [k, s] of steps.entries()) await rec.create({ type: 'task', title: s, date: addDays(t, k), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0 });
-            await rec.remove(x.id);
-          } else continue;
-          n++;
-        }
-        return `Sorted ${plural(n, 'task')}`;
-      }, 'Apply');
-    } });
+const overdueList = (D, t) => D.tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 40);
+SPECS.overdue = {
+  title: 'Sort out overdue', label: 'Apply', system: OVERDUE_PROMPT,
+  ready: (D, t) => overdueList(D, t).length > 0,
+  request: (t) => `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(data(), t)} tasks a day.\n\n## Overdue tasks\n${overdueList(data(), t).map((x) => taskLine(x, t)).join('\n')}`,
+  parse: (text, t) => {
+    const j = pullJSON(text), rows = [];
+    for (const a of Array.isArray(j.actions) ? j.actions : []) {
+      const x = a && get(String(a.id)); if (!x || !isOverdue(x, t) || rows.some((r) => r.id === x.id)) continue;
+      const action = ACTIONS[a.action] ? a.action : 'keep';
+      const steps = (Array.isArray(a.steps) ? a.steps : []).map((s) => String(s || '').trim().slice(0, 200)).filter(Boolean).slice(0, 4);
+      rows.push({ on: action !== 'keep', id: x.id, title: x.title, action: action === 'split' && !steps.length ? 'keep' : action, date: day(a.date) > t ? day(a.date) : addDays(t, 1), steps: steps.join('\n'), why: String(a.why || '').slice(0, 120) });
+    }
+    return { rows };
+  },
+  still: (r) => { const x = get(r.id); return !!x && !x.done && isOverdue(x, today()); },
+  row: (r, i) => `<span class="rev-note">${esc(r.title)}</span><div class="org-when"><select data-rev="action" data-i="${i}" aria-label="What to do">${Object.entries(ACTIONS).map(([k, l]) => `<option value="${k}" ${r.action === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${r.action === 'move' ? dateField(i, r.date) : ''}</div>${r.action === 'split' ? `<textarea class="rev-steps" data-rev="steps" data-i="${i}" rows="3" aria-label="Steps, one per line">${esc(r.steps)}</textarea>` : ''}${r.why ? `<span class="small muted">${esc(r.why)}</span>` : ''}`,
+  apply: async (sel, rec) => {
+    const t = today();
+    let n = 0;
+    for (const r of sel) {
+      const x = get(r.id); if (!x) continue;
+      if (r.action === 'today') await rec.update({ ...x, date: t, moved: (x.moved || 0) + 1 });
+      else if (r.action === 'move' && day(r.date)) await rec.update({ ...x, date: r.date, moved: (x.moved || 0) + 1 });
+      else if (r.action === 'drop') await rec.remove(x.id);
+      else if (r.action === 'split') {
+        const steps = String(r.steps).split('\n').map((v) => v.trim()).filter(Boolean);
+        if (!steps.length) continue;
+        for (const [k, v] of steps.entries()) await rec.create({ type: 'task', title: v, date: addDays(t, k), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0 });
+        await rec.remove(x.id);
+      } else continue;
+      n++;
+    }
+    return `Sorted ${plural(n, 'task')}`;
+  },
 };
+/* Show a spec's rows in a sheet area; used after asking now and when opening a waiting suggestion. */
+function reviewSpec(spec, out, rows, note = '') {
+  showReview(out, rows, spec.row, spec.apply, spec.label);
+  if (note && rows.length && $('#rev-list')) $('#rev-list').insertAdjacentHTML('beforebegin', `<p class="small" id="plan-note">${esc(note)}</p>`);
+}
+const specButton = (key, intro, empty) => () => {
+  const spec = SPECS[key], t = today();
+  if (!spec.ready(data(), t)) { toast(empty); return; }
+  aiTool({ title: spec.title, intro: intro(), system: spec.system, request: () => spec.request(t),
+    onAnswer: (text, out) => { const r = spec.parse(text, t); reviewSpec(spec, out, r.rows, r.note); } });
+};
+A['plan-week'] = specButton('plan', () => 'The AI spreads your open tasks over the next 7 days, sized to what you usually finish. You check every move.', 'No open tasks to plan.');
+A['overdue-sort'] = specButton('overdue', () => `The AI suggests what to do with each of your ${plural(overdueList(data(), today()).length, 'overdue task')}: do today, move, split or delete. You decide.`, 'Nothing is overdue.');
 
 /* ---- 4. A line about today, on Home ---- */
 const HOME_PROMPT = `Write one or two short sentences for the top of someone's day view: the single thing most worth knowing about today, from their records. Name the specific task, event or habit. Plain words, no greeting, no list, no exclamation marks, under 40 words. Plain text only.`;
+function homeRequest(t) {
+  const D = data(), y = addDays(t, -1);
+  return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}, ${fmtTime(`${LB.now().getHours()}:${pad(LB.now().getMinutes())}`)}.\n\n## Today's calendar\n${eventsOn(D, t).map(eventLine).join('\n') || '(nothing)'}\n\n## Due today or overdue\n${D.tasks.filter((x) => !x.done && x.date && x.date <= t).map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Done yesterday\n${doneOn(D, y).map((x) => x.title).join('; ') || '(nothing)'}\n\n## Habits (done in the last 7 days)\n${D.habits.map((h) => `${h.title}: ${habitCount(h, addDays(t, -7), addDays(t, -1))}/7${habitDone(h, t) ? ', done today' : ''}`).join('\n') || '(none)'}\n\n## Notes for today or tomorrow\n${D.notes.filter((n) => [t, addDays(t, 1)].includes(noteDay(n))).map((n) => `${noteDay(n)}: ${n.title} ${trunc(String(n.body || '').replace(/\s+/g, ' '), 200)}`).join('\n') || '(none)'}`;
+}
+const saveHomeLine = (t, text) => saveSettings({ homeLine: { date: t, text: String(text).replace(/[*#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300) } });
 A['home-ai'] = () => {
   const t = today();
   aiTool({ title: 'About today', intro: 'The AI writes one line about today for the top of Home. It stays until tomorrow.', system: HOME_PROMPT,
-    request: () => {
-      const D = data(), y = addDays(t, -1);
-      return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}, ${fmtTime(`${LB.now().getHours()}:${pad(LB.now().getMinutes())}`)}.\n\n## Today's calendar\n${eventsOn(D, t).map(eventLine).join('\n') || '(nothing)'}\n\n## Due today or overdue\n${D.tasks.filter((x) => !x.done && x.date && x.date <= t).map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Done yesterday\n${doneOn(D, y).map((x) => x.title).join('; ') || '(nothing)'}\n\n## Habits (done in the last 7 days)\n${D.habits.map((h) => `${h.title}: ${habitCount(h, addDays(t, -7), addDays(t, -1))}/7${habitDone(h, t) ? ', done today' : ''}`).join('\n') || '(none)'}\n\n## Notes for today or tomorrow\n${D.notes.filter((n) => [t, addDays(t, 1)].includes(noteDay(n))).map((n) => `${noteDay(n)}: ${n.title} ${trunc(String(n.body || '').replace(/\s+/g, ' '), 200)}`).join('\n') || '(none)'}`;
-    },
-    onAnswer: async (text) => {
-      const line = String(text).replace(/[*#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
-      await saveSettings({ homeLine: { date: t, text: line } });
-      closeSheet();
-      go('home');
-    } });
+    request: () => homeRequest(t),
+    onAnswer: async (text) => { await saveHomeLine(t, text); closeSheet(); go('home'); } });
 };
 const homeLine = () => { const h = S.settings.homeLine; return h && h.date === today() && h.text ? h.text : ''; };
 
 /* ---- 5. Weekly look back ---- */
 const WEEK_PROMPT = `Write a short look back on one person's last 7 days from their records, under 180 words, with three parts in bold: **Done**, **Slipped** (and why, if their notes say), **One thing to try next week**. Use only what is in the records and say so when something is unclear. Be specific. No praise padding.`;
+function weekRequest(t) {
+  const D = data(), from = addDays(t, -6);
+  const done = D.tasks.filter((x) => x.done && x.doneDate >= from && x.doneDate <= t);
+  const slipped = D.tasks.filter((x) => !x.done && x.date && x.date < t && x.date >= addDays(t, -13));
+  const notes = D.notes.filter((n) => noteDay(n) >= from && noteDay(n) <= t && !/^Look back · /.test(n.title || ''));
+  return `This week: ${from} to ${t}.\n\n## Done (${done.length})\n${done.map((x) => `${x.doneDate}: ${x.title}`).join('\n') || '(nothing)'}\n\n## Still open past their date\n${slipped.map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Habits\n${D.habits.map((h) => `${h.title}: ${habitCount(h, from, t)} of 7 days`).join('\n') || '(none)'}\n\n## Goals\n${D.goals.map((g) => `${g.title}: ${goalNow(g)} of ${g.target}`).join('\n') || '(none)'}\n\n## Calendar\n${D.events.filter((e) => e.date >= from && e.date <= t).map(eventLine).join('\n') || '(nothing)'}\n\n## Notes from this week\n${notes.map((n) => `${noteDay(n)} ${n.title}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 400)}`).join('\n') || '(none)'}`;
+}
+const saveLookBack = (t, text) => put({ type: 'note', title: 'Look back · ' + fmtDate(t, { month: 'short', day: 'numeric' }), body: text, pinned: false, date: t });
 A['look-back'] = () => {
-  const t = today(), from = addDays(t, -6);
+  const t = today();
   aiTool({ title: 'Weekly look back', intro: 'The AI looks at your last 7 days and writes a short look back. You can save it as a note.', system: WEEK_PROMPT,
-    request: () => {
-      const D = data();
-      const done = D.tasks.filter((x) => x.done && x.doneDate >= from && x.doneDate <= t);
-      const slipped = D.tasks.filter((x) => !x.done && x.date && x.date < t && x.date >= addDays(t, -13));
-      const notes = D.notes.filter((n) => noteDay(n) >= from && noteDay(n) <= t);
-      return `This week: ${from} to ${t}.\n\n## Done (${done.length})\n${done.map((x) => `${x.doneDate}: ${x.title}`).join('\n') || '(nothing)'}\n\n## Still open past their date\n${slipped.map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Habits\n${D.habits.map((h) => `${h.title}: ${habitCount(h, from, t)} of 7 days`).join('\n') || '(none)'}\n\n## Goals\n${D.goals.map((g) => `${g.title}: ${goalNow(g)} of ${g.target}`).join('\n') || '(none)'}\n\n## Calendar\n${D.events.filter((e) => e.date >= from && e.date <= t).map(eventLine).join('\n') || '(nothing)'}\n\n## Notes from this week\n${notes.map((n) => `${noteDay(n)} ${n.title}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 400)}`).join('\n') || '(none)'}`;
-    },
+    request: () => weekRequest(t),
     onAnswer: async (text, out) => {
       await saveSettings({ lookBack: t });
       out.innerHTML = `<div class="ai-out"><div class="prose" id="tool-answer">${mdLite(text)}</div><div class="row-end"><button class="btn sm primary" id="tool-save">Save as note</button></div></div>`;
       $('#tool-save', out).addEventListener('click', async (ev) => {
         const b = ev.currentTarget; // currentTarget is gone after the first await
         b.disabled = true;
-        await put({ type: 'note', title: 'Look back · ' + fmtDate(t, { month: 'short', day: 'numeric' }), body: text, pinned: false, date: t });
+        await saveLookBack(t, text);
         b.textContent = 'Saved'; toast('Saved to Notes');
       });
     } });
