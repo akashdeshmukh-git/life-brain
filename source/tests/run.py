@@ -116,14 +116,44 @@ def ai_setup(pg, kind='ok', key='sk-test-123'):
 @test('Start', 'Opens on Home: five tabs, no errors, no example data, a calm empty brief')
 def _(pg, ctx):
     open_app(pg, '')
-    tabs = pg.locator('.tab').all_inner_texts()
-    check([t.strip() for t in tabs] == ['Home', 'Today', 'Calendar', 'Notes', 'Progress'], f'tabs {tabs}')
+    items = pg.eval_on_selector_all('.drawer-panel .nav-item b', 'els => els.map(e => e.textContent)')
+    check(items == ['Home', 'Today', 'Calendar', 'Notes', 'Progress', 'How it works', 'Settings'], f'menu {items}')
+    check(count(pg, '.tabbar, .tab') == 0 and count(pg, '[aria-label=Settings]') == 0, 'no bottom tabs and no gear on screens')
     check(ev(pg, '() => LB.route.name') == 'home', 'should start on Home')
     check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
     check(pg.inner_text('.headline').startswith('The whole day is yours'), pg.inner_text('.headline'))
     check('Nothing needs you' in pg.inner_text('.brief-bottom'), 'calm line missing')
     check(count(pg, '.terrain .ridge') == 1 and count(pg, '.terrain .now') <= 1, 'drawing')
     check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '() => document.fonts.check("600 30px Fraunces")'), 'serif headline font')
+
+@test('Start', 'The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it')
+def _(pg, ctx):
+    open_app(pg, '')
+    check(not pg.is_visible('.drawer-panel .nav-item'), 'menu should start closed')
+    pg.click('.menu-btn'); pg.wait_for_timeout(300)
+    check(pg.is_visible('.drawer-panel') and pg.get_attribute('#drawer', 'aria-hidden') == 'false', 'menu did not open')
+    check(pg.inner_text('.nav-item[aria-current=page] b') == 'Home', 'current screen not marked')
+    check(ev(pg, "() => document.activeElement.closest('.drawer-panel') !== null"), 'focus should move into the menu')
+    check('Tasks to do and habits to tick' in pg.inner_text('.drawer-panel'), 'each item says what it is for')
+    check(pg.eval_on_selector_all('.drawer-panel .nav-item b', 'els => els.map(e => e.textContent)')[-1] == 'Settings', 'Settings last')
+    pg.click('.drawer-panel .nav-item[data-to=calendar]'); pg.wait_for_timeout(300)
+    check(ev(pg, '() => LB.route.name') == 'calendar' and not ev(pg, "() => document.documentElement.classList.contains('menu-open')"), 'nav + close')
+    pg.click('.menu-btn'); pg.wait_for_timeout(250); pg.keyboard.press('Escape'); pg.wait_for_timeout(250)
+    check(not ev(pg, "() => document.documentElement.classList.contains('menu-open')"), 'Escape')
+    pg.click('.menu-btn'); pg.wait_for_timeout(250); pg.mouse.click(380, 400); pg.wait_for_timeout(250)
+    check(not ev(pg, "() => document.documentElement.classList.contains('menu-open')"), 'backdrop')
+    for v in ['today', 'notes', 'progress', 'settings']:
+        go(pg, v); check(count(pg, 'main .menu-btn') == 1, f'{v} has no menu button')
+
+@test('Start', 'First open shows How it works once; it can be opened again from the menu', intro=True)
+def _(pg, ctx):
+    open_app(pg, '')
+    pg.wait_for_selector('.sheet .intro')
+    check('Organise' in pg.inner_text('.sheet') and 'menu' in pg.inner_text('.sheet'), 'guide content')
+    pg.click('[data-action=intro-done]'); sheet_closed(pg)
+    reload(pg); pg.wait_for_timeout(400)
+    check(count(pg, '.sheet .intro') == 0, 'should only show once')
+    pg.click('.menu-btn'); pg.wait_for_timeout(250); pg.click('[data-action=intro]'); pg.wait_for_selector('.sheet .intro')
 
 @test('Start', 'Today still works as before')
 def _(pg, ctx):
@@ -736,6 +766,7 @@ def main():
         for cat, name, fn, opts in TESTS:
             if only and not any(o.lower() in (cat + ' ' + name).lower() for o in only): continue
             ctx = browser.new_context(viewport={'width': 390, 'height': 844}, accept_downloads=True, service_workers='allow')
+            if not opts.get('intro'): ctx.add_init_script('window.LB_NO_INTRO = true')  # the welcome guide has its own test
             pg = ctx.new_page(); errors = []
             pg.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
             pg.on('console', lambda m: errors.append(m.text) if m.type == 'error' and 'Failed to load resource' not in m.text else None)

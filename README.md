@@ -2,7 +2,9 @@
 
 Tasks, calendar, notes, habits and goals in one simple app, with an optional AI that looks for patterns. Everything stays on your phone. There's no account and no server.
 
-## The five tabs
+## The five screens
+
+Everything is in the menu: tap **☰** at the top left, or swipe in from the left edge. Each item says what it's for, and Settings is at the bottom. The first time you open the app, **How it works** explains each screen. It's in the menu too, whenever you want it again.
 
 - **Home.** A 30-second look at the day, opened first. One line sums up the day, the calendar is drawn as a line that rises where the day is fuller (a sun marks open time, a clay dot marks now), and morning, afternoon and evening each get a sentence. Below: **Needs attention** (overdue and today's tasks, tomorrow's events, habits you usually do but haven't ticked, goals nearly done, a backup reminder when one is due), **Already sorted** (what got done, habits kept) and up to two **Worth knowing** patterns. Tap any bold title to open it. Add your name in Settings and the headline uses it.
 - **Today.** Today's tasks: type to add one, tap the circle to tick it off. Undated tasks sit under *Anytime*. Below them are your habits (tap to tick). Type a date word at the end, like "Call mom tomorrow" or "Pay rent friday", and the task lands on that day.
@@ -13,7 +15,7 @@ Tasks, calendar, notes, habits and goals in one simple app, with an optional AI 
 
 Every screen shares Home's look: warm paper and ink, serif titles, thin lines instead of boxes, and one clay accent. Dark is true black.
 
-Settings (the gear) has your name, the theme (Auto, Light, Dark), the accent colour, the AI key, and backups.
+Settings (last in the menu) has your name, the theme (Auto, Light, Dark), the accent colour, the AI key, and backups.
 
 ## AI
 

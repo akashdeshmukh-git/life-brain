@@ -7,7 +7,7 @@ VIEWS.settings = (sub) => {
   if (!snapCache) listSnapshots().then((l) => { snapCache = l; if (route.name === 'settings') render(); }).catch(() => { snapCache = []; });
   if (sub === 'ai') setTimeout(() => { const el = $('#ai-card'); if (el) el.scrollIntoView({ block: 'start' }); }, 0);
   const offline = !window.LB_PWA ? '' : LB.swState === 'ready' ? 'Works offline.' : LB.swState === 'error' ? 'Offline mode could not be set up.' : 'Setting up offline mode…';
-  return `<header class="top"><button class="icon-btn" data-action="nav" data-to="home" aria-label="Back">${icon('left')}</button><div class="top-text"><h1>Settings</h1></div></header>`
+  return `<header class="top">${menuBtn()}<div class="top-text"><h1>Settings</h1></div></header>`
     + `<section class="card">${sectionH('You')}<label class="field"><span>Your name, for Home</span><input id="f-name" data-live="name" value="${esc(st.name || '')}" maxlength="40" autocomplete="given-name" placeholder="Optional"></label></section>`
     + `<section class="card">${sectionH('Look')}
       <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
@@ -182,3 +182,19 @@ A.wipe = async () => {
   go('home');
   toast('Everything deleted');
 };
+
+/* ---- How it works: shown once on first open, and any time from the menu ---- */
+A.intro = () => {
+  closeMenu();
+  const row = (ic, name, text) => `<li><span class="nav-ic">${icon(ic)}</span><span><b>${name}</b><br>${text}</span></li>`;
+  openSheet({ title: 'How Life Brain works', body: `<ul class="intro">
+      ${row('home', 'Home', 'Open the app here. It tells you what’s on today and what needs you.')}
+      ${row('today', 'Today', 'Type a task and press Enter. Tap the circle when it’s done. End with “tomorrow” or “friday” to plan ahead.')}
+      ${row('calendar', 'Calendar', 'Tap a day to see it, or add a task, event or note to it.')}
+      ${row('notes', 'Notes', 'Write down the why. Tap Organise to turn a brain dump into tasks.')}
+      ${row('progress', 'Progress', 'Habits to keep, goals to count toward, and what you might be missing.')}
+    </ul>
+    <p class="small">Everything is in the menu <b>☰</b> at the top left. Buttons marked ✦ use your AI, and always show you what they’ll do before anything changes.</p>
+    <div class="row-end"><button class="btn primary" data-action="intro-done">Got it</button></div>` });
+};
+A['intro-done'] = async () => { closeSheet(); if (!S.settings.introSeen) await saveSettings({ introSeen: true }); };

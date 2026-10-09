@@ -1,12 +1,14 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **41 of 41 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **43 of 43 PASSED**.
 
 AI calls were tested against a local mock service, including Organise and the six AI tools. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans or sorts is untested. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
 | Area | Test | Result |
 |---|---|---|
 | Start | Opens on Home: five tabs, no errors, no example data, a calm empty brief | PASSED |
+| Start | The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it | PASSED |
+| Start | First open shows How it works once; it can be opened again from the menu | PASSED |
 | Start | Today still works as before | PASSED |
 | Home | Brief: headline with your name, the day as a line with one dot per event, three acts, what needs you and what is done | PASSED |
 | Home | A full day reads as a climb; events can have an end time | PASSED |
