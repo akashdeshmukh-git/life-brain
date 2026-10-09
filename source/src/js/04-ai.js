@@ -1,69 +1,12 @@
-/* ===== External AI: provider abstraction. Nothing is sent without a preview the user confirms. ===== */
-const AI = (LB.AI = { sample: null, sampleChecked: false });
-
-const SYSTEM_PROMPT = `You are the reasoning layer inside Life Brain, a personal life operating system.
+/* ===== AI: any API key, recognised automatically. Nothing is sent until you've seen it and pressed Send. ===== */
+const AI = (LB.AI = {});
+const SYSTEM_PROMPT = `You look at one person's own records from Life Brain (tasks, calendar, journal, habits, goals, notes) and tell them what they may not be seeing.
 Rules:
-- Work only from the evidence given. Say plainly when evidence is missing or thin.
-- Never diagnose the person's psychology or character. Talk about plans, load, evidence and options.
-- For a diagnosis, give 2–3 competing hypotheses (H1, H2, H3), the evidence for each, a confidence (low/medium/high), and what new information would change the conclusion.
-- Suggest; never decide for the person. Never tell them to change their values or direction.
-- Prefer sustainable progress over maximum output.
-- Be concise: under 300 words, plain language, short lists where they help.`;
-
-/* Context scopes the user can include or leave out. Each returns plain text. */
-const SCOPES = {
-  direction: { label: 'Direction, values and priorities', build: (D) => {
-    const p = D.profile;
-    return [p.identity && `Identity: ${p.identity}`, p.direction && `Direction: ${p.direction}`, p.values?.length && `Values (ranked): ${p.values.join(', ')}`, p.priorities && `Priorities: ${p.priorities}`, `Daily capacity: ${p.capacityHours || 6}h`].filter(Boolean).join('\n');
-  } },
-  model: { label: 'Areas, aims, goals and projects', build: (D) => {
-    const L = [];
-    D.areas.forEach((a) => L.push(`Area: ${a.name}`));
-    D.aims.forEach((a) => L.push(`Aim: ${a.title}${a.areaId ? ` (area: ${get(a.areaId)?.name || '?'})` : ''}`));
-    D.goals.forEach((g) => L.push(`Goal [${g.status}]: ${g.title}${g.due ? `, due ${g.due}` : ''}${g.aimId ? `, aim: ${get(g.aimId)?.title || '?'}` : ''}${!g.aimId && !g.areaId ? ', not linked' : ''}`));
-    D.projects.forEach((p) => L.push(`Project [${p.status}]: ${p.title}${p.goalId ? `, goal: ${get(p.goalId)?.title || '?'}` : ', no goal'}`));
-    return L.join('\n');
-  } },
-  plan: { label: 'Open tasks and the next 7 days', build: (D, o) => {
-    const t = today(), L = [];
-    D.tasks.filter((x) => x.status === 'open').sort((a, b) => Brain.score(D, b) - Brain.score(D, a)).slice(0, 25).forEach((x) =>
-      L.push(`Task: ${x.title} | priority ${x.priority || 2} | est ${x.estimateMin ? fmtMin(x.estimateMin) : 'none'} | planned ${x.plannedDate || 'unplanned'} | moved ${x.deferrals || 0}× | ${Brain.chain(D, x).linked ? 'linked' : 'unlinked'}`));
-    for (let i = 0; i < 7; i++) {
-      const d = addDays(t, i), l = Brain.dayLoad(D, d, t);
-      if (l.total) L.push(`Day ${d}: load ${fmtMin(l.total)} of ${fmtMin(l.cap)} (${pct(l.ratio)})`);
-      l.events.forEach((e) => L.push(`  Event: ${e.title}${e.allDay ? ' (all day)' : ` ${e.start || ''}–${e.end || ''}`}${o.details && e.location ? ` @ ${e.location}` : ''}${o.details && e.notes ? ` | ${e.notes}` : ''}`));
-    }
-    return L.join('\n');
-  } },
-  reality: { label: 'Last 14 days: what actually happened', build: (D) => {
-    const t = today(), L = [];
-    D.tasks.filter((x) => ['done', 'abandoned', 'skipped'].includes(x.status) && isYmd(x.doneDate || x.statusDate) && daysBetween(x.doneDate || x.statusDate, t) <= 14).forEach((x) =>
-      L.push(`${x.status}: ${x.title} | est ${x.estimateMin ? fmtMin(x.estimateMin) : '—'} | actual ${x.actualMin ? fmtMin(x.actualMin) : '—'}${x.outcome ? ` | outcome: ${x.outcome}` : ''}${x.abandonedReason ? ` | reason: ${x.abandonedReason}` : ''}`));
-    Brain.weekly(D, t, 2).forEach((w) => L.push(`Week of ${w.start}: ${w.kept}/${w.planned} plans kept`));
-    const c = Brain.calibration(D);
-    if (c.n) L.push(`Estimate calibration: actual/estimate median ${c.median.toFixed(2)} over ${c.n} tasks`);
-    return L.join('\n');
-  } },
-  findings: { label: 'What the local Brain detected', build: (D) => Brain.active(D).slice(0, 12).map((f) => `- [${f.severity}] ${f.title}. ${f.summary}${f.evidence.length ? ' Evidence: ' + f.evidence.slice(0, 4).join('; ') : ''}`).join('\n') },
-  experiments: { label: 'Experiments', build: (D) => D.experiments.map((e) => `Experiment [${e.status}]: ${e.title} | hypothesis: ${e.hypothesis || '—'} | ${(e.observations || []).length} observations${e.outcome ? ` | outcome: ${e.outcome}` : ''}${e.learning ? ` | learned: ${e.learning}` : ''}`).join('\n') },
-  memory: { label: 'Lessons and past decisions', build: (D) => D.memories.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 20).map((m) => `${MEM_KINDS[m.kind] || 'Note'}: ${m.title}${m.body ? ' — ' + trunc(m.body, 200) : ''}`).join('\n') },
-};
-
-function buildContext(scopes, o = {}) {
-  const D = data();
-  return Object.keys(SCOPES).filter((k) => scopes.includes(k)).map((k) => {
-    const body = SCOPES[k].build(D, o).trim();
-    return `## ${SCOPES[k].label}\n${body || '(nothing recorded)'}`;
-  }).join('\n\n');
-}
-
-AI.detect = async () => {
-  if (AI.sampleChecked) return AI.sample;
-  try { AI.sample = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('sample') : null; }
-  catch (_) { AI.sample = null; }
-  AI.sampleChecked = true;
-  return AI.sample;
-};
+- Work only from the records given. Say plainly when there is too little to go on.
+- Point out patterns: what keeps slipping, what goes with good and bad days, where time really goes, what they keep avoiding.
+- Never diagnose their psychology or character.
+- End with at most three small, concrete things to try next week.
+- Be short: under 250 words, plain words, short lists.`;
 /* ---- Providers: paste any key, we recognise the service and speak its own API. ---- */
 const PROVIDERS = {
   openrouter: { name: 'OpenRouter', style: 'openai', base: 'https://openrouter.ai/api/v1', detect: /^sk-or-/, keys: 'https://openrouter.ai/keys', fallback: 'openrouter/auto', prefer: [/^openrouter\/auto$/] },
@@ -103,12 +46,10 @@ const connected = () => (S.settings.ai.linked || []).filter((p) => PROVIDERS[p] 
 AI.connected = connected;
 AI.provider = () => {
   const a = S.settings.ai.active;
-  if (a === 'claude') return AI.sample ? 'claude' : 'none';
   if (PROVIDERS[a] && connected().includes(a)) return a;
-  if (AI.sample) return 'claude';
   return connected()[0] || 'none';
 };
-AI.providerName = (p = AI.provider()) => (p === 'claude' ? 'Claude (built in)' : PROVIDERS[p] ? `${PROVIDERS[p].name} · ${provModel(p) || 'no model'}` : 'No provider');
+AI.providerName = (p = AI.provider()) => (PROVIDERS[p] ? `${PROVIDERS[p].name} · ${provModel(p) || 'no model'}` : 'No provider');
 const hostOf = (u) => { try { return new URL(u).host; } catch (_) { return 'invalid URL'; } };
 const aiErr = (code, message) => Object.assign(new Error(message), { code });
 const checkUrl = (u) => {
@@ -133,9 +74,7 @@ async function aiFetch(href, init, { signal, secs } = {}) {
     catch (e) {
       if (reason === 'timeout') throw aiErr('timeout', `No answer after ${secs} seconds. Try again, or raise the timeout in Settings → AI.`);
       if (reason === 'cancelled') throw aiErr('cancelled', 'Stopped.');
-      throw aiErr('network', env() === 'claude'
-        ? `Could not reach ${url.host}. This copy of Life Brain runs inside Claude, which blocks outside connections. Use Claude (built in) here, or open the self-hosted app to use your own key.`
-        : `Could not reach ${url.host}. Check your connection. Some services refuse requests sent straight from a browser; if this keeps happening, that service needs a proxy (set its address under Advanced).`);
+      throw aiErr('network', `Could not reach ${url.host}. Check your internet. Some services refuse requests sent straight from a browser; if this keeps happening, that service needs a proxy (Settings → AI → Advanced).`);
     }
     let body = null;
     try { body = await res.json(); } catch (_) { if (reason === 'timeout') throw aiErr('timeout', `No answer after ${secs} seconds.`); }
@@ -213,83 +152,74 @@ async function callProvider(p, user, signal) {
   if (!text || !String(text).trim()) throw aiErr('empty', 'The service answered with no text.');
   return String(text);
 }
-const CLAUDE_ERR = {
-  not_granted: 'Claude was not allowed for this page. You can allow it from the page’s permissions menu.',
-  sampling_disabled: 'Claude is not available for this account.', rate_limited: 'Too many requests, or your Claude usage limit is reached. Try again later.',
-  session_expired: 'Your Claude session expired. Sign in again.', refused: 'Claude declined this request. Try rephrasing it.',
-  empty_completion: 'Claude returned no text. Try asking for less at once.', prompt_too_large: 'Too much context was included. Leave out some sections and try again.',
-  cancelled: 'Stopped.', upstream_error: 'Claude had a temporary problem. Try again.',
-};
-async function callClaude(user, signal, onText) {
-  if (!AI.sample) throw aiErr('unavailable', 'Claude is not available in this copy of Life Brain.');
-  try {
-    const { text } = await AI.sample(SYSTEM_PROMPT + '\n\n' + user, { signal, onText: onText ? ({ text }) => onText(text) : undefined, cache: false });
-    return text;
-  } catch (e) {
-    const code = e && e.code;
-    throw Object.assign(aiErr(code || 'upstream_error', CLAUDE_ERR[code] || 'Claude had a temporary problem. Try again.'), { partial: e && e.text });
-  }
-}
-AI.call = (user, { signal, onText } = {}) => {
+AI.call = (user, { signal } = {}) => {
   const p = AI.provider();
-  if (p === 'claude') return callClaude(user, signal, onText);
   if (PROVIDERS[p]) return callProvider(p, user, signal);
-  return Promise.reject(aiErr('none', 'No AI is set up yet. Paste any API key in Settings → AI.'));
+  return Promise.reject(aiErr('none', 'No AI is set up yet. Paste an API key in Settings → AI.'));
 };
 
-/* The one entry point views use: preview what will be shared, then ask. */
-function askAI({ title, question, scopes = [], extra = '', saveAs = 'lesson' }) {
-  const state = { scopes: [...scopes], details: false };
-  const payload = () => [buildContext(state.scopes, state), extra && `## Specific item\n${extra}`, `## Request\n${question}`].filter(Boolean).join('\n\n');
+/* What can be shared, one switch each. Notes are off by default: they're the most private. */
+const SCOPES = {
+  tasks: { label: 'Tasks (last 30 days and open)', on: true, build: (D, t) => {
+    const from = addDays(t, -30), L = [];
+    D.tasks.filter((x) => x.done && isYmd(x.doneDate) && x.doneDate >= from).sort((a, b) => a.doneDate.localeCompare(b.doneDate)).forEach((x) => L.push(`Done ${x.doneDate}: ${x.title}${x.date && x.date !== x.doneDate ? ` (was due ${x.date})` : ''}`));
+    D.tasks.filter((x) => !x.done).forEach((x) => L.push(`Open: ${x.title}${x.date ? ` | due ${x.date}${x.date < t ? ' (overdue)' : ''}` : ' | no date'}${x.moved ? ` | moved ${x.moved}×` : ''}`));
+    return L.join('\n');
+  } },
+  calendar: { label: 'Calendar (last 30 and next 14 days)', on: true, build: (D, t) => D.events.filter((e) => e.date >= addDays(t, -30) && e.date <= addDays(t, 14)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).map((e) => `${e.date}${e.time ? ' ' + e.time : ''}: ${e.title}`).join('\n') },
+  journal: { label: 'Journal and mood (last 30 days)', on: true, build: (D, t) => D.journals.filter((j) => j.date >= addDays(t, -30) && j.date <= t).sort((a, b) => a.date.localeCompare(b.date)).map((j) => `${j.date}${Number(j.mood) ? ` mood ${j.mood}/5` : ''}: ${trunc(String(j.text || '').replace(/\s+/g, ' '), 400)}`).join('\n') },
+  habits: { label: 'Habits (last 30 days)', on: true, build: (D, t) => D.habits.map((h) => {
+    const days = [...Array(30)].map((_, i) => (habitDone(h, addDays(t, i - 29)) ? '■' : '·')).join('');
+    return `${h.title}: ${habitCount(h, addDays(t, -29), t)}/30 days, streak ${habitStreak(h, t)} | ${days} (oldest → today)`;
+  }).join('\n') },
+  goals: { label: 'Goals', on: true, build: (D) => D.goals.map((g) => `${g.title}: ${goalNow(g)} of ${g.target}${g.unit ? ' ' + g.unit : ''}`).join('\n') },
+  patterns: { label: 'Patterns the app found', on: true, build: (D, t) => patterns(D, t).map((p) => '- ' + p.text).join('\n') },
+  notes: { label: 'Notes', on: false, build: (D) => D.notes.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 15).map((n) => `${n.title || 'Untitled'}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 300)}`).join('\n') },
+};
+function buildContext(scopes) {
+  const D = data(), t = today();
+  return `Today is ${t}.\n\n` + Object.keys(SCOPES).filter((k) => scopes.includes(k)).map((k) => `## ${SCOPES[k].label}\n${SCOPES[k].build(D, t).trim() || '(nothing recorded)'}`).join('\n\n');
+}
+const QUESTION = 'What patterns do you see in my last month that I might be missing? What is working, what keeps slipping, and what should I try next week?';
+/* Preview exactly what will leave the phone, then send. */
+function askAI() {
   const prov = AI.provider();
-  const body = () => `
-    <p class="small muted">Only what is shown below leaves this device, and only to <b>${esc(AI.providerName(prov))}</b>${PROVIDERS[prov] ? ` at ${esc(hostOf(provBase(prov)))}` : ''}. Nothing is sent until you press Send.</p>
-    <div class="section"><div class="section-h"><h2>Include</h2></div>
-      <div class="stack">${Object.entries(SCOPES).map(([k, s]) => `<label class="check"><input type="checkbox" data-scope="${k}" ${state.scopes.includes(k) ? 'checked' : ''}> ${esc(s.label)}</label>`).join('')}
-        <label class="check"><input type="checkbox" data-scope-details ${state.details ? 'checked' : ''}> Event locations and notes</label>
-      </div></div>
-    <div class="section"><div class="section-h"><h2>Exactly what will be sent</h2><span class="xs muted num" id="ai-size"></span></div>
-      <pre class="preview" id="ai-preview"></pre></div>
-    ${prov === 'none' ? `<p class="err" style="margin-top:12px">No AI provider is available. Set one up in Settings → AI.</p>` : ''}
-    <div class="form-actions"><button class="btn" data-action="sheet-close">Cancel</button><button class="btn primary" id="ai-send" ${prov === 'none' ? 'disabled' : ''}>Send</button></div>
-    <div id="ai-result"></div>`;
-  openSheet({ title: title || 'Ask the Brain', body: body(), onMount(root) {
-    const refresh = () => { const p = payload(); $('#ai-preview', root).textContent = SYSTEM_PROMPT + '\n\n' + p; $('#ai-size', root).textContent = `${(SYSTEM_PROMPT.length + p.length).toLocaleString()} characters`; };
+  if (prov === 'none') { go('settings', 'ai'); toast('Add an API key first. Any service works.'); return; }
+  const state = { scopes: Object.keys(SCOPES).filter((k) => SCOPES[k].on), q: QUESTION };
+  const payload = () => `${buildContext(state.scopes)}\n\n## Question\n${state.q}`;
+  openSheet({ title: 'Ask AI', body: `
+    <label class="field"><span>Your question</span><textarea id="ai-q" rows="3" maxlength="1000">${esc(state.q)}</textarea></label>
+    <div class="field"><span>Share</span><div class="checks">${Object.entries(SCOPES).map(([k, s]) => `<label class="check"><input type="checkbox" data-scope="${k}" ${state.scopes.includes(k) ? 'checked' : ''}> ${esc(s.label)}</label>`).join('')}</div></div>
+    <details class="preview-box"><summary>See exactly what will be sent <span class="muted" id="ai-size"></span></summary><pre class="preview" id="ai-preview"></pre></details>
+    <p class="hint">Goes only to <b>${esc(AI.providerName(prov))}</b>. Nothing leaves your phone until you press Send.</p>
+    <div class="row-end"><button class="btn" data-action="sheet-close">Cancel</button><button class="btn primary" id="ai-send">Send</button></div>
+    <div id="ai-result"></div>`,
+  onMount(root) {
+    const refresh = () => { const p = payload(); $('#ai-preview', root).textContent = SYSTEM_PROMPT + '\n\n' + p; $('#ai-size', root).textContent = `· ${(SYSTEM_PROMPT.length + p.length).toLocaleString()} characters`; };
     refresh();
-    root.addEventListener('change', (ev) => {
-      const k = ev.target.dataset.scope;
-      if (k) { state.scopes = ev.target.checked ? [...state.scopes, k] : state.scopes.filter((s) => s !== k); refresh(); }
-      if ('scopeDetails' in ev.target.dataset) { state.details = ev.target.checked; refresh(); }
-    });
-    $('#ai-send', root).addEventListener('click', () => runAI(root, payload(), title, saveAs));
+    root.addEventListener('change', (ev) => { const k = ev.target.dataset.scope; if (k) { state.scopes = ev.target.checked ? [...state.scopes, k] : state.scopes.filter((s) => s !== k); refresh(); } });
+    $('#ai-q', root).addEventListener('input', (ev) => { state.q = ev.target.value.trim() || QUESTION; refresh(); });
+    $('#ai-send', root).addEventListener('click', () => runAI(root, payload()));
   } });
 }
-async function runAI(root, user, title, saveAs) {
-  const out = $('#ai-result', root), send = $('#ai-send', root);
-  const ctl = new AbortController();
+LB.askAI = askAI;
+async function runAI(root, user) {
+  const out = $('#ai-result', root), send = $('#ai-send', root), ctl = new AbortController();
   send.disabled = true;
-  out.innerHTML = `<div class="section"><div class="ai-out"><p class="muted" id="ai-text">Thinking…</p><div class="form-actions"><button class="btn sm" id="ai-stop">Stop</button></div></div></div>`;
+  out.innerHTML = `<div class="ai-out"><p class="muted">Thinking…</p><button class="btn sm" id="ai-stop">Stop</button></div>`;
   $('#ai-stop', root).addEventListener('click', () => ctl.abort());
   out.scrollIntoView({ block: 'nearest' });
   try {
-    const text = await AI.call(user, { signal: ctl.signal, onText: (t) => { const el = $('#ai-text', root); if (el) { el.className = 'prose'; el.innerHTML = mdLite(t); } } });
-    out.innerHTML = `<div class="section"><div class="section-h"><h2>Answer · ${esc(AI.providerName())}</h2></div><div class="ai-out prose" id="ai-answer">${mdLite(text)}</div>
-      <p class="xs muted" style="margin-top:8px">This is a suggestion. Nothing in your Life Brain was changed.</p>
-      <div class="form-actions"><button class="btn sm" id="ai-copy">Copy</button><button class="btn sm primary" id="ai-save">Save to memory</button></div></div>`;
+    const text = await AI.call(user, { signal: ctl.signal });
+    out.innerHTML = `<div class="ai-out"><div class="prose" id="ai-answer">${mdLite(text)}</div>
+      <div class="row-end"><button class="btn sm" id="ai-copy">Copy</button><button class="btn sm primary" id="ai-save">Save as note</button></div></div>`;
     $('#ai-copy', root).addEventListener('click', () => copyText(text));
     $('#ai-save', root).addEventListener('click', async (ev) => {
-      const b = ev.currentTarget;
-      b.disabled = true;
-      try {
-        await put({ type: 'memory', kind: saveAs, title: title || 'Brain answer', body: text, date: today(), source: 'ai' });
-        b.textContent = 'Saved';
-        toast('Saved to Learning & Memory');
-      } catch (e) { b.disabled = false; toast(e.message, 'bad'); }
+      const b = ev.currentTarget; b.disabled = true;
+      try { await put({ type: 'note', title: 'AI: ' + fmtDate(today(), { month: 'short', day: 'numeric' }), body: text, pinned: false }); b.textContent = 'Saved'; toast('Saved to Notes'); }
+      catch (e) { b.disabled = false; toast(e.message, 'bad'); }
     });
   } catch (e) {
-    out.innerHTML = `<div class="section"><div class="ai-out">${e.partial ? `<div class="prose">${mdLite(e.partial)}</div><p class="xs muted">The answer was interrupted.</p>` : ''}<p class="err" id="ai-error" data-code="${esc(e.code || 'error')}">${esc(e.message || 'Something went wrong.')}</p></div></div>`;
-  } finally {
-    send.disabled = false;
-    send.textContent = 'Send again';
-  }
+    out.innerHTML = `<div class="ai-out"><p class="err" id="ai-error" data-code="${esc(e.code || 'error')}">${esc(e.message || 'Something went wrong.')}</p></div>`;
+  } finally { send.disabled = false; send.textContent = 'Send again'; }
 }

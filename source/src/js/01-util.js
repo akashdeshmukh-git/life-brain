@@ -1,5 +1,5 @@
 'use strict';
-/* ===== Utilities ===== */
+/* ===== Life Brain: notes, calendar, tasks, journal, habits, progress and AI, kept on this device. ===== */
 const LB = (window.LB = {});
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -13,15 +13,26 @@ const isYmd = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
 const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
-const toMin = (t) => { if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-const fmtDate = (s, o = { weekday: 'short', month: 'short', day: 'numeric' }) => (isYmd(s) ? parseYmd(s).toLocaleDateString(undefined, o) : '');
-const fmtMin = (m) => { m = Number(m); if (!m && m !== 0) return '—'; m = Math.round(m); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}`; };
-const weekStart = (s) => { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
-const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const weekStart = (s) => { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); }; // Monday
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-const pct = (x) => Math.round(x * 100) + '%';
 const plural = (n, w, p = w + 's') => `${n} ${n === 1 ? w : p}`;
 const trunc = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+const fmtDate = (s, o = { weekday: 'short', month: 'short', day: 'numeric' }) => (isYmd(s) ? parseYmd(s).toLocaleDateString(undefined, o) : '');
+/* "Today", "Tomorrow", "Yesterday", else "Mon, Oct 12". */
+const relDate = (s, t = today()) => {
+  if (!isYmd(s)) return '';
+  const n = daysBetween(t, s);
+  if (n === 0) return 'Today';
+  if (n === 1) return 'Tomorrow';
+  if (n === -1) return 'Yesterday';
+  return fmtDate(s, parseYmd(s).getFullYear() === parseYmd(t).getFullYear() ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+};
+const fmtTime = (t) => {
+  if (!/^\d{1,2}:\d{2}$/.test(t || '')) return '';
+  const [h, m] = t.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+};
+const weekdayName = (w) => new Date(2024, 0, 7 + w).toLocaleDateString(undefined, { weekday: 'long' }); // 7 Jan 2024 was a Sunday
 
 /* Markdown-lite for AI answers: escape first, then a few safe patterns. */
 function mdLite(src) {
@@ -47,28 +58,21 @@ function mdLite(src) {
 }
 
 const ICON = {
-  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
-  today: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
-  life: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
-  brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A3.2 3.2 0 0 0 7 18a3 3 0 0 0 5 1.6V5.7A3 3 0 0 0 9 4.5Z"/><path d="M15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2 3.2 3.2 0 0 1-3 5.3 3 3 0 0 1-5 1.6"/>',
-  now: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-  tasks: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/>',
-  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
-  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
-  flask: '<path d="M9 3h6M10 3v6.2L4.6 18.3A1.8 1.8 0 0 0 6.2 21h11.6a1.8 1.8 0 0 0 1.6-2.7L14 9.2V3"/><path d="M7.5 15h9"/>',
-  book: '<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5z"/><path d="M4 19.5A1.5 1.5 0 0 0 5.5 21H20"/>',
+  today: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  notes: '<path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9 12.5h7M9 16h5"/>',
+  progress: '<path d="M4 20V13M10 20V8M16 20v-5M21 20H3"/><path d="m4 9 6-5 6 4 5-4"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  board: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
-  lines: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v1.5a3.5 3.5 0 0 0 3.5 3.5h5A3.5 3.5 0 0 0 18 8.5V7M12 12v5"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   left: '<path d="m15 6-6 6 6 6"/>',
   right: '<path d="m9 6 6 6-6 6"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
-  edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/>',
-  up: '<path d="m6 15 6-6 6 6"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  pin: '<path d="M9 3.5h6l-1 6 3.5 3.5h-11L10 9.5z"/><path d="M12 13v7.5"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M6.3 17.7l2.5-2.5M15.2 8.8l2.5-2.5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
 };
-const icon = (n, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`;
+const icon = (n, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`;
