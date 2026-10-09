@@ -2,9 +2,10 @@
 const ui = { anytime: true, done: false };
 
 /* One task row. The circle ticks it; the rest opens it. */
-function taskRow(x, t = today(), { showDate = true } = {}) {
+function taskRow(x, t = today(), { showDate = true, showGoal = true } = {}) {
   const over = isOverdue(x, t);
-  const meta = [showDate && over ? `<span class="bad">${esc(relDate(x.date, t))}</span>` : '', x.note ? '<span>Note</span>' : ''].filter(Boolean).join(' · ');
+  const gl = showGoal && x.goalId && get(x.goalId);
+  const meta = [showDate && over ? `<span class="bad">${esc(relDate(x.date, t))}</span>` : '', gl ? `<span class="tgoal">${icon('goal')}${esc(trunc(gl.title, 28))}</span>` : '', x.note && !gl ? '<span>Note</span>' : ''].filter(Boolean).join(' · ');
   return `<div class="task${x.done ? ' done' : ''}" data-task="${x.id}">
     <button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>
     <button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</button></div>`;
@@ -71,6 +72,7 @@ A['task-toggle'] = async (el) => {
   if (!x) return;
   const was = { done: x.done, doneDate: x.doneDate };
   await put({ ...x, done: !x.done, doneDate: x.done ? '' : today() });
+  if (SH.open && $('#goal-steps') && ui.goalOpen) LB.goalDetail(get(ui.goalOpen)); // ticked from inside a goal
   if (!x.done) { haptic(); toast('Done', '', { action: 'Undo', onAction: () => put({ ...get(x.id), ...was }) }); }
 };
 A['overdue-today'] = async () => {
@@ -87,6 +89,7 @@ function taskSheet(x, date = '') {
     <label class="field"><span>Task</span><input name="title" value="${esc(r.title)}" maxlength="300" required autocomplete="off"></label>
     <label class="field"><span>Date</span><input type="date" name="date" id="task-date" value="${esc(r.date || '')}"></label>
     <div class="chips"><button type="button" class="chip" data-action="set-date" data-v="${t}">Today</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 1)}">Tomorrow</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 7)}">Next week</button><button type="button" class="chip" data-action="set-date" data-v="">No date</button></div>
+    ${goalSelect(r.goalId || '')}
     <label class="field"><span>Note</span><textarea name="note" rows="3" maxlength="4000">${esc(r.note || '')}</textarea></label>
     <p class="err" data-form-error></p>
     <div class="row-end">${x ? `<button type="button" class="btn danger" data-action="delete" data-id="${x.id}">Delete</button>${x.done ? '' : `<button type="button" class="btn" data-action="task-break" data-id="${x.id}">${icon('spark')}Break down</button>`}<span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
@@ -97,7 +100,7 @@ F.task = async (form, v) => {
   if (!title) throw new Error('Give the task a name.');
   const old = get(form.dataset.id);
   const later = old && isYmd(old.date) && (!date || date > old.date) && old.date <= today(); // pushed back once it was due
-  await put({ ...(old || { type: 'task', done: false, doneDate: '', moved: 0 }), title, date, note: String(v.note || '').trim(), moved: (old && old.moved || 0) + (later && !old.done ? 1 : 0) });
+  await put({ ...(old || { type: 'task', done: false, doneDate: '', moved: 0 }), title, date, note: String(v.note || '').trim(), goalId: v.goalId !== undefined ? (get(v.goalId) ? v.goalId : '') : (old && old.goalId) || '', moved: (old && old.moved || 0) + (later && !old.done ? 1 : 0) });
   closeSheet();
 };
 /* Delete anything, with Undo. */
@@ -146,6 +149,7 @@ A['habit-edit'] = (el) => habitSheet(get(el.dataset.id));
 function habitSheet(h) {
   openSheet({ title: h ? 'Habit' : 'New habit', body: `<form class="form" data-form="habit" data-id="${h ? h.id : ''}">
     <label class="field"><span>Habit</span><input name="title" value="${esc(h ? h.title : '')}" maxlength="80" required autocomplete="off" placeholder="Walk 20 minutes"></label>
+    ${goalSelect(h ? h.goalId || '' : '')}
     <p class="err" data-form-error></p>
     <div class="row-end">${h ? `<button type="button" class="btn danger" data-action="delete" data-id="${h.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
 }
@@ -153,7 +157,7 @@ F.habit = async (form, v) => {
   const title = String(v.title || '').trim();
   if (!title) throw new Error('Give the habit a name.');
   const old = get(form.dataset.id);
-  await put({ ...(old || { type: 'habit', log: {} }), title });
+  await put({ ...(old || { type: 'habit', log: {} }), title, goalId: v.goalId !== undefined ? (get(v.goalId) ? v.goalId : '') : (old && old.goalId) || '' });
   closeSheet();
 };
 

@@ -1,11 +1,12 @@
 /* ===== Organise: the AI reads one note (a brain dump) and suggests tasks, events, habits and goals.
    You see exactly what is sent, then check every suggestion before anything is added. ===== */
 const ORGANISE_PROMPT = `You turn one person's messy note into items for their planner app. Reply with JSON only, no other text, in exactly this shape:
-{"items":[{"kind":"task","title":"...","date":"YYYY-MM-DD or empty"},{"kind":"event","title":"...","date":"YYYY-MM-DD","time":"HH:MM","end":"HH:MM or empty"},{"kind":"habit","title":"..."},{"kind":"goal","title":"...","target":12,"unit":"books"}]}
+{"items":[{"kind":"task","title":"...","date":"YYYY-MM-DD or empty","goal":"goal title or empty"},{"kind":"event","title":"...","date":"YYYY-MM-DD","time":"HH:MM","end":"HH:MM or empty"},{"kind":"habit","title":"...","goal":"goal title or empty"},{"kind":"goal","title":"...","target":12,"unit":"books"}]}
 Rules:
-- task: something to do once. event: something at a set time (a meeting, call, class, appointment). habit: something to repeat regularly ("every evening", "daily", "mon/wed/fri"). goal: a number to reach ("12 books", "30 runs").
+- task: something to do once. event: something at a set time (a meeting, call, class, appointment). habit: something to repeat regularly ("every evening", "daily", "mon/wed/fri"). goal: something they want to reach ("finish the paper", "read 12 books"). Give target and unit only when it is a count; otherwise target 0.
 - Work out dates from words like "tomorrow", "friday", "next week" using today's date. If no date is given, leave it empty. Never invent a date.
 - Times are 24-hour HH:MM. An event needs a date and a time; without them, make it a task.
+- goal on a task or habit: the exact title of the one goal it moves forward, either a goal they already have (listed below) or a goal in your list. Empty if none.
 - If a habit has set days, put them in the title, like "Gym (Mon/Wed/Fri)".
 - Short titles in the person's own words. Tasks start with a verb. No emoji.
 - Leave out thoughts, reasons and feelings: those stay in the note.
@@ -40,7 +41,7 @@ function parseItems(text) {
     if (!r || typeof r !== 'object' || !KINDS[r.kind]) continue;
     const title = String(r.title || '').replace(/\s+/g, ' ').trim().slice(0, 200);
     if (!title) continue;
-    const it = { kind: r.kind, title, date: day(r.date), time: TIME.test(r.time || '') ? r.time : '', end: TIME.test(r.end || '') ? r.end : '', target: clamp(Math.round(Number(r.target) || 1), 1, 100000), unit: String(r.unit || '').slice(0, 20) };
+    const it = { kind: r.kind, title, date: day(r.date), time: TIME.test(r.time || '') ? r.time : '', end: TIME.test(r.end || '') ? r.end : '', target: clamp(Math.round(Number(r.target) || 0), 0, 100000), unit: String(r.unit || '').slice(0, 20), goal: String(r.goal || '').replace(/\s+/g, ' ').trim().slice(0, 120) };
     if (it.kind === 'event' && (!it.date || !it.time)) it.kind = 'task'; // an event without a day and time is really a task
     it.dup = have.has(title.toLowerCase());
     it.on = !it.dup;
@@ -84,17 +85,21 @@ A['organise-send'] = async () => {
 };
 A['organise-stop'] = () => { if (ORG.ctl) ORG.ctl.abort(); };
 
+/* Goals a task or habit here can be tied to: the ones you have, plus new ones ticked in this list */
+const orgGoals = () => [...new Set(activeGoals(data()).map((g) => g.title).concat(ORG.items.filter((x) => x.on && x.kind === 'goal' && x.title.trim()).map((x) => x.title.trim())))];
 function orgRow(it, i) {
   const t = today();
   const when = it.kind === 'task' ? `<input type="date" data-org="date" data-i="${i}" value="${esc(it.date)}" aria-label="Date">`
     : it.kind === 'event' ? `<input type="date" data-org="date" data-i="${i}" value="${esc(it.date)}" aria-label="Date"><input type="time" data-org="time" data-i="${i}" value="${esc(it.time)}" aria-label="Time">`
-    : it.kind === 'goal' ? `<input type="number" inputmode="numeric" min="1" data-org="target" data-i="${i}" value="${esc(it.target)}" aria-label="Target"><input data-org="unit" data-i="${i}" value="${esc(it.unit)}" placeholder="unit" maxlength="20" aria-label="Unit">`
+    : it.kind === 'goal' ? `<input type="number" inputmode="numeric" min="0" data-org="target" data-i="${i}" value="${it.target ? esc(it.target) : ''}" placeholder="count" aria-label="Target, if you're counting"><input data-org="unit" data-i="${i}" value="${esc(it.unit)}" placeholder="unit" maxlength="20" aria-label="Unit">`
     : '<span class="small muted">Shows on Today to tick</span>';
+  const goals = orgGoals(), gsel = (it.kind === 'task' || it.kind === 'habit') && goals.length
+    ? `<select data-org="goal" data-i="${i}" aria-label="Goal" class="org-goal"><option value="">No goal</option>${goals.map((g) => `<option value="${esc(g)}" ${g.toLowerCase() === String(it.goal || '').toLowerCase() ? 'selected' : ''}>${esc(trunc(g, 40))}</option>`).join('')}</select>` : '';
   return `<div class="org-item${it.on ? '' : ' off'}">
     <input type="checkbox" class="org-on" data-org="on" data-i="${i}" ${it.on ? 'checked' : ''} aria-label="Add ${esc(it.title)}">
     <div class="org-main"><div class="org-top"><select data-org="kind" data-i="${i}" aria-label="Kind">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}" ${it.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <input class="org-title" data-org="title" data-i="${i}" value="${esc(it.title)}" maxlength="200" aria-label="Title"></div>
-      <div class="org-when">${when}${it.kind === 'task' && it.date ? `<span class="small muted">${esc(relDate(it.date, t))}</span>` : ''}${it.dup ? '<span class="small muted">Already in your app</span>' : ''}</div></div></div>`;
+      <div class="org-when">${when}${gsel}${it.kind === 'task' && it.date ? `<span class="small muted">${esc(relDate(it.date, t))}</span>` : ''}${it.dup ? '<span class="small muted">Already in your app</span>' : ''}</div></div></div>`;
 }
 function renderOrganised() {
   const out = $('#org-result');
@@ -113,24 +118,32 @@ const orgChange = (ev) => {
   const it = ORG.items[Number(ev.target.dataset.i)];
   if (!it) return;
   if (k === 'on') it.on = ev.target.checked;
-  else if (k === 'target') it.target = clamp(Math.round(Number(ev.target.value) || 1), 1, 100000);
+  else if (k === 'target') it.target = clamp(Math.round(Number(ev.target.value) || 0), 0, 100000);
   else it[k] = ev.target.value;
-  if (k === 'kind' || k === 'on' || (k === 'date' && ev.type === 'change')) renderOrganised();
+  if (k === 'kind' || k === 'on' || (k === 'title' && ev.type === 'change' && it.kind === 'goal') || (k === 'date' && ev.type === 'change')) renderOrganised();
   else { const b = $('#org-add'); if (b) { const c = ORG.items.filter((x) => x.on).length; b.disabled = !c; b.textContent = `Add ${c || ''}`; } }
 };
 document.addEventListener('input', orgChange);
-document.addEventListener('change', (ev) => { if (ev.target.dataset && ['kind', 'on', 'date'].includes(ev.target.dataset.org)) orgChange(ev); });
+document.addEventListener('change', (ev) => { if (ev.target.dataset && ['kind', 'on', 'date', 'title'].includes(ev.target.dataset.org)) orgChange(ev); });
 
 A['organise-add'] = async () => {
   const n = get(ORG.noteId), from = n ? `From your note “${trunc(n.title || String(n.body || '').split('\n')[0], 60)}”` : '';
-  const made = [];
-  for (const it of ORG.items.filter((x) => x.on && x.title.trim())) {
+  const made = [], picked = ORG.items.filter((x) => x.on && x.title.trim());
+  const bad = picked.find((it) => it.kind === 'event' && !day(it.date));
+  if (bad) { toast(`“${trunc(bad.title.trim(), 30)}” needs a date to be an event.`, 'bad'); return; }
+  // Goals first, so the tasks and habits in the same list can be tied to them
+  const gid = new Map(activeGoals(data()).map((g) => [g.title.trim().toLowerCase(), g.id]));
+  for (const it of picked.filter((x) => x.kind === 'goal')) {
+    const g = await put({ type: 'goal', title: it.title.trim().slice(0, 120), why: '', by: '', target: it.target || 0, unit: it.unit.trim(), log: {}, done: false, doneDate: '' }, { quiet: true });
+    made.push(g); gid.set(g.title.toLowerCase(), g.id);
+  }
+  const goalOf = (it) => gid.get(String(it.goal || '').trim().toLowerCase()) || '';
+  for (const it of picked.filter((x) => x.kind !== 'goal')) {
     const title = it.title.trim();
     let r;
-    if (it.kind === 'task') r = { type: 'task', title, date: day(it.date), done: false, doneDate: '', note: from, moved: 0 };
-    else if (it.kind === 'event') { if (!day(it.date)) { toast(`“${trunc(title, 30)}” needs a date to be an event.`, 'bad'); return; } r = { type: 'event', title, date: it.date, time: TIME.test(it.time) ? it.time : '', end: TIME.test(it.time) && TIME.test(it.end) ? it.end : '', note: from }; }
-    else if (it.kind === 'habit') r = { type: 'habit', title: title.slice(0, 80), log: {} };
-    else r = { type: 'goal', title: title.slice(0, 120), target: it.target || 1, unit: it.unit.trim(), log: {} };
+    if (it.kind === 'task') r = { type: 'task', title, date: day(it.date), done: false, doneDate: '', note: from, moved: 0, goalId: goalOf(it) };
+    else if (it.kind === 'event') { r = { type: 'event', title, date: it.date, time: TIME.test(it.time) ? it.time : '', end: TIME.test(it.time) && TIME.test(it.end) ? it.end : '', note: from }; }
+    else r = { type: 'habit', title: title.slice(0, 80), log: {}, goalId: goalOf(it) };
     made.push(await put(r, { quiet: true }));
   }
   if (ORG.noteId) await dropPending((p) => p.kind === 'organise' && p.noteId === ORG.noteId);

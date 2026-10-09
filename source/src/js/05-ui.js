@@ -26,8 +26,9 @@ const TABS = [
   { id: 'home', label: 'Home', icon: 'home', hint: 'Your day at a glance' },
   { id: 'today', label: 'Today', icon: 'today', hint: 'Tasks to do and habits to tick' },
   { id: 'calendar', label: 'Calendar', icon: 'calendar', hint: 'Your month, day by day' },
+  { id: 'goals', label: 'Goals', icon: 'goal', hint: 'What you want, and whether you’re getting there' },
   { id: 'notes', label: 'Notes', icon: 'notes', hint: 'Why things happened, and brain dumps' },
-  { id: 'progress', label: 'Progress', icon: 'progress', hint: 'Habits, goals and patterns' },
+  { id: 'progress', label: 'Progress', icon: 'progress', hint: 'Your week, habits and patterns' },
 ];
 const VIEWS = {};
 const route = { name: 'home', sub: '' };

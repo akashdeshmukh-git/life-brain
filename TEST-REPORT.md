@@ -1,12 +1,12 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **49 of 49 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **56 of 56 PASSED**.
 
-AI calls were tested against a local mock service, including Organise, the six AI tools and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans or sorts is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
+AI calls were tested against a local mock service, including Organise, the AI tools (Plan steps and Tie to goals among them) and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans, sorts or ties tasks to goals is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
 | Area | Test | Result |
 |---|---|---|
-| Start | Opens on Home: five tabs, no errors, no example data, a calm empty brief | PASSED |
+| Start | Opens on Home: every screen in the menu, no errors, no example data, a calm brief that asks for a first goal | PASSED |
 | Start | The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it | PASSED |
 | Start | First open shows How it works once; it can be opened again from the menu | PASSED |
 | Start | Today still works as before | PASSED |
@@ -21,7 +21,14 @@ AI calls were tested against a local mock service, including Organise, the six A
 | Calendar | Month grid, pick a day, add a task and an event there, dots appear, month arrows work | PASSED |
 | Calendar | Today's events show on Today | PASSED |
 | Notes | Write, search, pin and delete notes; an empty new note is not saved | PASSED |
-| Goals | Add a goal, +1, correct the count, reach it | PASSED |
+| Goals | Home invites a first goal; only its name is needed; it opens straight to a first step, which ties to it; Mark done, with Undo | PASSED |
+| Goals | Goals screen: examples to start from; a counting goal gets +1, a corrected count, and moves to Done when reached | PASSED |
+| Goals | Tasks and habits are tied to a goal from their own sheet; the picker only shows once a goal exists | PASSED |
+| Heading | Where you’re heading: finished work by goal, the goal behind its date named first, its fix, and rows that open the goal | PASSED |
+| Heading | Fixes: a stalled goal gets its next step put on tomorrow in one tap, with Undo; a task moved again and again opens; Not now hides a fix for a week | PASSED |
+| Heading | Fixes: a day fuller than usual offers to move the newest loose tasks to later this week; tasks tied to goals stay; Undo | PASSED |
+| AI | Plan steps for a goal from a Home fix: steps come tied to the goal, never past its date, without repeats; Undo | PASSED |
+| AI | Tie tasks to goals: the AI matches loose tasks to goals, unknown ids are ignored, you can change a goal before Apply | PASSED |
 | Progress | Week numbers: tasks done, habits only counted since they were added, overdue now | PASSED |
 | Patterns | Finds a slipped habit, a task moved again and again, and the overdue pile | PASSED |
 | Patterns | Says nothing when there is too little data | PASSED |

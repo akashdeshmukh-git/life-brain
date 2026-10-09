@@ -18,7 +18,7 @@ const capacity = (D, t) => { // tasks actually finished per day, over the last 1
   const n = D.tasks.filter((x) => x.done && isYmd(x.doneDate) && x.doneDate >= addDays(t, -13) && x.doneDate <= t).length;
   return Math.round((n / 14) * 10) / 10;
 };
-const taskLine = (x, t) => `${x.id} | ${x.title}${x.date ? ` | due ${x.date}${x.date < t ? ' (overdue)' : ''}` : ' | no date'}${x.moved ? ` | moved ${x.moved} times` : ''}${x.note ? ` | note: ${trunc(x.note.replace(/\s+/g, ' '), 120)}` : ''}`;
+const taskLine = (x, t) => `${x.id} | ${x.title}${x.goalId && get(x.goalId) ? ` | goal: ${get(x.goalId).title}` : ''}${x.date ? ` | due ${x.date}${x.date < t ? ' (overdue)' : ''}` : ' | no date'}${x.moved ? ` | moved ${x.moved} times` : ''}${x.note ? ` | note: ${trunc(x.note.replace(/\s+/g, ' '), 120)}` : ''}`;
 const eventLine = (e) => `${e.date}${e.time ? ' ' + e.time + (e.end ? '-' + e.end : '') : ''}: ${e.title}`;
 
 /* One sheet for every tool: intro, optional extra fields, the exact request, Send, then the result. */
@@ -117,7 +117,7 @@ A['task-break'] = (el) => {
         : `<div class="org-top"><input class="org-title" data-rev="title" data-i="${i}" value="${esc(s.title)}" maxlength="200" aria-label="Step"></div><div class="org-when">${dateField(i, s.date)}${s.date ? `<span class="small muted">${esc(relDate(s.date))}</span>` : ''}</div>`,
       async (rows, rec) => {
         const add = rows.filter((r) => !r.replace && r.title.trim());
-        for (const s of add) await rec.create({ type: 'task', title: s.title.trim(), date: day(s.date), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0 });
+        for (const s of add) await rec.create({ type: 'task', title: s.title.trim(), date: day(s.date), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0, goalId: x.goalId || '' });
         if (rows.some((r) => r.replace) && add.length) await rec.remove(x.id);
         return `Added ${plural(add.length, 'step')}`;
       }, 'Add');
@@ -135,14 +135,14 @@ Rules:
 - Only use the ids given. Give each task a day from today to 6 days ahead, or "" to leave it unscheduled this week.
 - Don't put more tasks on a day than they usually finish (round up), and fewer on days with several events.
 - Never schedule a task after its due date. Overdue tasks go early in the week or are left unscheduled.
-- Spread similar tasks out. Don't schedule everything: a realistic week beats a full one.`;
+- Tasks for a goal that is behind or stalled go early in the week. Spread similar tasks out. Don't schedule everything: a realistic week beats a full one.`;
 const planOpen = (D, t) => D.tasks.filter((x) => !x.done && (!x.date || x.date <= addDays(t, 6))).slice(0, 60);
 SPECS.plan = {
   title: 'Plan my week', label: 'Apply', system: PLAN_PROMPT,
   ready: (D, t) => planOpen(D, t).length > 0,
   request: (t) => {
     const D = data(), evs = D.events.filter((e) => e.date >= t && e.date <= addDays(t, 6)).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-    return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(D, t)} tasks a day (last 14 days).\n\n## Open tasks\n${planOpen(D, t).map((x) => taskLine(x, t)).join('\n') || '(none)'}\n\n## Calendar, next 7 days\n${evs.map(eventLine).join('\n') || '(nothing)'}`;
+    return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}.\nThey finish about ${capacity(D, t)} tasks a day (last 14 days).\n\n## Open tasks\n${planOpen(D, t).map((x) => taskLine(x, t)).join('\n') || '(none)'}\n\n## Goals\n${activeGoals(D).map((g) => goalForAI(D, g, t)).join('\n') || '(none)'}\n\n## Calendar, next 7 days\n${evs.map(eventLine).join('\n') || '(nothing)'}`;
   },
   parse: (text, t) => {
     const j = pullJSON(text), rows = [];
@@ -195,7 +195,7 @@ SPECS.overdue = {
       else if (r.action === 'split') {
         const steps = String(r.steps).split('\n').map((v) => v.trim()).filter(Boolean);
         if (!steps.length) continue;
-        for (const [k, v] of steps.entries()) await rec.create({ type: 'task', title: v, date: addDays(t, k), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0 });
+        for (const [k, v] of steps.entries()) await rec.create({ type: 'task', title: v, date: addDays(t, k), done: false, doneDate: '', note: `Step of “${trunc(x.title, 60)}”`, moved: 0, goalId: x.goalId || '' });
         await rec.remove(x.id);
       } else continue;
       n++;
@@ -220,10 +220,10 @@ A['plan-week'] = specButton('plan', () => 'The AI spreads your open tasks over t
 A['overdue-sort'] = specButton('overdue', () => `The AI suggests what to do with each of your ${plural(overdueList(data(), today()).length, 'overdue task')}: do today, move, split or delete. You decide.`, 'Nothing is overdue.');
 
 /* ---- 4. A line about today, on Home ---- */
-const HOME_PROMPT = `Write one or two short sentences for the top of someone's day view: the single thing most worth knowing about today, from their records. Name the specific task, event or habit. Plain words, no greeting, no list, no exclamation marks, under 40 words. Plain text only.`;
+const HOME_PROMPT = `Write one or two short sentences for the top of someone's day view: the single thing most worth knowing about today, from their records. Name the specific task, event or habit. If a goal is behind or stalled and something today could move it, that is often the thing. Plain words, no greeting, no list, no exclamation marks, under 40 words. Plain text only.`;
 function homeRequest(t) {
   const D = data(), y = addDays(t, -1);
-  return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}, ${fmtTime(`${LB.now().getHours()}:${pad(LB.now().getMinutes())}`)}.\n\n## Today's calendar\n${eventsOn(D, t).map(eventLine).join('\n') || '(nothing)'}\n\n## Due today or overdue\n${D.tasks.filter((x) => !x.done && x.date && x.date <= t).map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Done yesterday\n${doneOn(D, y).map((x) => x.title).join('; ') || '(nothing)'}\n\n## Habits (done in the last 7 days)\n${D.habits.map((h) => `${h.title}: ${habitCount(h, addDays(t, -7), addDays(t, -1))}/7${habitDone(h, t) ? ', done today' : ''}`).join('\n') || '(none)'}\n\n## Notes for today or tomorrow\n${D.notes.filter((n) => [t, addDays(t, 1)].includes(noteDay(n))).map((n) => `${noteDay(n)}: ${n.title} ${trunc(String(n.body || '').replace(/\s+/g, ' '), 200)}`).join('\n') || '(none)'}`;
+  return `Today is ${fmtDate(t, { weekday: 'long' })}, ${t}, ${fmtTime(`${LB.now().getHours()}:${pad(LB.now().getMinutes())}`)}.\n\n## Today's calendar\n${eventsOn(D, t).map(eventLine).join('\n') || '(nothing)'}\n\n## Due today or overdue\n${D.tasks.filter((x) => !x.done && x.date && x.date <= t).map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Done yesterday\n${doneOn(D, y).map((x) => x.title).join('; ') || '(nothing)'}\n\n## Habits (done in the last 7 days)\n${D.habits.map((h) => `${h.title}: ${habitCount(h, addDays(t, -7), addDays(t, -1))}/7${habitDone(h, t) ? ', done today' : ''}`).join('\n') || '(none)'}\n\n## Goals\n${activeGoals(D).map((g) => goalForAI(D, g, t)).join('\n') || '(none)'}\n\n## Notes for today or tomorrow\n${D.notes.filter((n) => [t, addDays(t, 1)].includes(noteDay(n))).map((n) => `${noteDay(n)}: ${n.title} ${trunc(String(n.body || '').replace(/\s+/g, ' '), 200)}`).join('\n') || '(none)'}`;
 }
 const saveHomeLine = (t, text) => saveSettings({ homeLine: { date: t, text: String(text).replace(/[*#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 300) } });
 A['home-ai'] = () => {
@@ -235,13 +235,13 @@ A['home-ai'] = () => {
 const homeLine = () => { const h = S.settings.homeLine; return h && h.date === today() && h.text ? h.text : ''; };
 
 /* ---- 5. Weekly look back ---- */
-const WEEK_PROMPT = `Write a short look back on one person's last 7 days from their records, under 180 words, with three parts in bold: **Done**, **Slipped** (and why, if their notes say), **One thing to try next week**. Use only what is in the records and say so when something is unclear. Be specific. No praise padding.`;
+const WEEK_PROMPT = `Write a short look back on one person's last 7 days from their records, under 180 words, with three parts in bold: **Done**, **Slipped** (and why, if their notes say), **One thing to try next week**. If they have goals, say which ones the week moved and which it didn't. Use only what is in the records and say so when something is unclear. Be specific. No praise padding.`;
 function weekRequest(t) {
   const D = data(), from = addDays(t, -6);
   const done = D.tasks.filter((x) => x.done && x.doneDate >= from && x.doneDate <= t);
   const slipped = D.tasks.filter((x) => !x.done && x.date && x.date < t && x.date >= addDays(t, -13));
   const notes = D.notes.filter((n) => noteDay(n) >= from && noteDay(n) <= t && !/^Look back · /.test(n.title || ''));
-  return `This week: ${from} to ${t}.\n\n## Done (${done.length})\n${done.map((x) => `${x.doneDate}: ${x.title}`).join('\n') || '(nothing)'}\n\n## Still open past their date\n${slipped.map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Habits\n${D.habits.map((h) => `${h.title}: ${habitCount(h, from, t)} of 7 days`).join('\n') || '(none)'}\n\n## Goals\n${D.goals.map((g) => `${g.title}: ${goalNow(g)} of ${g.target}`).join('\n') || '(none)'}\n\n## Calendar\n${D.events.filter((e) => e.date >= from && e.date <= t).map(eventLine).join('\n') || '(nothing)'}\n\n## Notes from this week\n${notes.map((n) => `${noteDay(n)} ${n.title}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 400)}`).join('\n') || '(none)'}`;
+  return `This week: ${from} to ${t}.\n\n## Done (${done.length})\n${done.map((x) => `${x.doneDate}: ${x.title}`).join('\n') || '(nothing)'}\n\n## Still open past their date\n${slipped.map((x) => taskLine(x, t)).join('\n') || '(nothing)'}\n\n## Habits\n${D.habits.map((h) => `${h.title}: ${habitCount(h, from, t)} of 7 days`).join('\n') || '(none)'}\n\n## Goals\n${D.goals.map((g) => goalForAI(D, g, t)).join('\n') || '(none)'}\n\n## Calendar\n${D.events.filter((e) => e.date >= from && e.date <= t).map(eventLine).join('\n') || '(nothing)'}\n\n## Notes from this week\n${notes.map((n) => `${noteDay(n)} ${n.title}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 400)}`).join('\n') || '(none)'}`;
 }
 const saveLookBack = (t, text) => put({ type: 'note', title: 'Look back · ' + fmtDate(t, { month: 'short', day: 'numeric' }), body: text, pinned: false, date: t });
 A['look-back'] = () => {

@@ -1,5 +1,5 @@
 /* Life Brain service worker: the app works offline. AI requests are never cached or touched. */
-const CACHE = 'lifebrain-20261009-1652';
+const CACHE = 'lifebrain-20261009-1751';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.png', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {

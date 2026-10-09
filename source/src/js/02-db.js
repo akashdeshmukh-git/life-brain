@@ -104,7 +104,7 @@ function cleanRecord(r) {
   if (!r || typeof r !== 'object' || !TYPES.includes(r.type) || typeof r.id !== 'string' || !SAFE_ID.test(r.id)) return null;
   const b = { id: r.id, type: r.type, createdAt: isoOr(r.createdAt), updatedAt: isoOr(r.updatedAt) };
   switch (r.type) {
-    case 'task': return { ...b, title: str(r.title, 300) || 'Task', date: day(r.date), done: !!r.done, doneDate: r.done ? day(r.doneDate) : '', note: str(r.note, 4000), moved: clamp(Math.round(Number(r.moved) || 0), 0, 999) };
+    case 'task': return { ...b, title: str(r.title, 300) || 'Task', date: day(r.date), done: !!r.done, doneDate: r.done ? day(r.doneDate) : '', note: str(r.note, 4000), moved: clamp(Math.round(Number(r.moved) || 0), 0, 999), goalId: SAFE_ID.test(r.goalId || '') ? r.goalId : '' };
     case 'event': { const time = TIME.test(r.time || '') ? r.time : ''; return day(r.date) ? { ...b, title: str(r.title, 300) || 'Event', date: day(r.date), time, end: time && TIME.test(r.end || '') ? r.end : '', note: str(r.note, 4000) } : null; }
     case 'note': return { ...b, title: str(r.title, 200), body: str(r.body, 100000), pinned: !!r.pinned, date: day(r.date) };
     case 'journal': { // the journal was folded into Notes: each written day becomes a dated note with the same id
@@ -112,8 +112,8 @@ function cleanRecord(r) {
       if (!day(r.date) || !text) return null;
       return { ...b, id: 'journal-' + r.date, type: 'note', title: 'Journal · ' + fmtDate(r.date, { month: 'short', day: 'numeric', year: 'numeric' }), body: (mood ? mood + ' ' : '') + text, pinned: false, date: r.date, createdAt: isoOr(r.createdAt) || r.date + 'T21:00:00.000Z' };
     }
-    case 'habit': return { ...b, title: str(r.title, 80) || 'Habit', log: dayLog(r.log, false), archived: !!r.archived };
-    case 'goal': return { ...b, title: str(r.title, 120) || 'Goal', target: clamp(Math.round(Number(r.target) || 1), 1, 100000), unit: str(r.unit, 20), log: dayLog(r.log, true) };
+    case 'habit': return { ...b, title: str(r.title, 80) || 'Habit', log: dayLog(r.log, false), archived: !!r.archived, goalId: SAFE_ID.test(r.goalId || '') ? r.goalId : '' };
+    case 'goal': return { ...b, title: str(r.title, 120) || 'Goal', why: str(r.why, 1000), by: day(r.by), target: clamp(Math.round(Number(r.target) || 0), 0, 100000), unit: str(r.unit, 20), log: dayLog(r.log, true), done: !!r.done, doneDate: r.done ? day(r.doneDate) : '' }; // target 0: a goal without a number, finished by its steps
   }
   return null;
 }
@@ -174,7 +174,7 @@ function fromOld(records, profile) {
       out.push({ ...base(r), type: 'note', title: String(r.title || ''), body: [r.body, r.why && 'Why: ' + r.why].filter(Boolean).join('\n\n'), pinned: false });
     } else if (r.type === 'goal') {
       const done = r.status === 'done';
-      out.push({ ...base(r), type: 'goal', title: String(r.title || 'Goal'), target: 1, unit: '', log: done ? { [today()]: 1 } : {} });
+      out.push({ ...base(r), type: 'goal', title: String(r.title || 'Goal'), why: String(r.why || ''), by: isYmd(r.due) ? r.due : '', target: 0, unit: '', log: {}, done, doneDate: done ? today() : '' });
     } else if (r.type === 'day' && isYmd(r.date) && String(r.note || '').trim()) {
       out.push({ id: 'journal-' + r.date, createdAt: r.createdAt || now, updatedAt: r.updatedAt || now, type: 'journal', date: r.date, text: String(r.note), mood: 0 });
     }

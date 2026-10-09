@@ -374,3 +374,48 @@ details > summary::-webkit-details-marker { display: none; }
 
 .tool-row { margin-top: 12px; }
 #tool-result:empty + .tool-row, #org-result:empty + .tool-row, #ai-result:empty + .tool-row { margin-top: 4px; }
+
+/* ---- Goals ---- */
+.gcard { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); }
+.gcard:first-child { border-top: 0; }
+.gcard-main { flex: 1; min-width: 0; padding: 14px 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.gtitle { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.gmeta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gstate { font-size: 13px; font-weight: 600; color: var(--muted); }
+.gstate.big { font-size: 15px; margin: 10px 0 12px; padding-left: 12px; border-left: 3px solid currentColor; }
+.gstate.big .small { font-weight: 400; color: var(--muted); }
+.state-on-track .gstate, .gstate.state-on-track, small.state-on-track, .state-done .gstate, .gstate.state-done, small.state-done { color: var(--ok); }
+.state-behind .gstate, .gstate.state-behind, small.state-behind, .state-stalled .gstate, .gstate.state-stalled, small.state-stalled { color: var(--accent); }
+.state-behind .meter i, .state-stalled .meter i { background: var(--accent); }
+.goal-empty p:first-child { margin-top: 0; font-size: 15px; }
+.goal-empty .btn.block { width: 100%; justify-content: center; }
+.gwhy { font-family: var(--serif); font-size: 17px; line-height: 1.35; margin: 0 0 6px; color: var(--text); }
+.task-meta .tgoal { display: inline-flex; align-items: center; gap: 3px; }
+.task-meta .tgoal svg { width: 13px; height: 13px; }
+
+/* ---- Home: where you're heading, and fixes ---- */
+.heading { margin: 0 0 24px; }
+.heading h2 { font-size: 15px; font-weight: 650; color: var(--ink); margin: 0; }
+.heading > h2 { margin-bottom: 6px; }
+.heading .sec-h { min-height: 32px; margin-bottom: 4px; }
+.heading .sec-h .link { display: inline-flex; align-items: center; gap: 4px; }
+.heading .sec-h .link svg { width: 16px; height: 16px; }
+.heading-line { font-family: var(--serif); font-size: 19px; line-height: 1.35; color: var(--ink); margin: 2px 0 12px; text-wrap: pretty; }
+.heading > .btn { margin-top: 2px; }
+.hbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); gap: 2px; }
+.hbar i { display: block; height: 100%; min-width: 4px; }
+.hbar i.none { background: var(--faint); }
+.heading .small { margin: 6px 0 4px; font-size: 13px; }
+.hlist { list-style: none; margin: 6px 0 0; padding: 0; }
+.hlist li { border-top: 1px solid var(--hair); }
+.hrow-goal { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 0; text-align: left; }
+.hdot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.hdot.none { background: var(--faint); }
+.hname { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hname b { font-size: 15px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hname small { font-size: 13px; color: var(--ink-soft); font-weight: 550; }
+.hnum { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--ink-soft); min-width: 2ch; text-align: right; }
+.fixes .fix-title { display: block; font-weight: 650; color: var(--ink); font-size: 16px; overflow-wrap: anywhere; }
+.fix-btns { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+.fix-btns .link { min-height: 36px; color: var(--ink-soft); }
+.org-when select.org-goal { max-width: 100%; }

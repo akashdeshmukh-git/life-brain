@@ -55,11 +55,12 @@ class MockAI(BaseHTTPRequestHandler):
             items = [{'kind': 'task', 'title': 'Finish chapter 3', 'date': tm}, {'kind': 'event', 'title': 'Supervisor call', 'date': tm, 'time': '11:00', 'end': '11:30'},
                      {'kind': 'habit', 'title': 'Gym (Mon/Wed/Fri)'}, {'kind': 'goal', 'title': 'Read books', 'target': 12, 'unit': 'books'},
                      {'kind': 'event', 'title': 'Dentist sometime'}, {'kind': 'habit', 'title': 'Walk'}, {'kind': 'spell', 'title': 'x'}, {'kind': 'task', 'title': '  '},
-                     {'kind': 'task', 'title': '<img src=x onerror="window.__xss4=1">', 'date': 'soon'}]
+                     {'kind': 'task', 'title': '<img src=x onerror="window.__xss4=1">', 'date': 'soon'}, {'kind': 'goal', 'title': 'Finish thesis', 'target': 0}]
+            items[0]['goal'] = 'finish THESIS'  # ties to the new goal in the same list, whatever the case
             return self.reply(200, {'choices': [{'message': {'content': 'Here you go:\n```json\n' + json.dumps({'items': items}) + '\n```'}}]})
         if kind == 'auto':  # answers by what is being asked, like a real model would
             sysmsg = body['messages'][0]['content']
-            kind = 'home' if sysmsg.startswith('Write one or two') else 'over' if sysmsg.startswith('Help clear') else 'week' if sysmsg.startswith('Write a short look back') else 'plan7' if sysmsg.startswith('You plan one') else 'plan' if sysmsg.startswith('You turn one') else 'junk'
+            kind = 'gsteps' if sysmsg.startswith('Plan the next concrete') else 'glink' if sysmsg.startswith('Tie a person') else 'home' if sysmsg.startswith('Write one or two') else 'over' if sysmsg.startswith('Help clear') else 'week' if sysmsg.startswith('Write a short look back') else 'plan7' if sysmsg.startswith('You plan one') else 'plan' if sysmsg.startswith('You turn one') else 'junk'
         if kind == 'plan':  # reached only from 'auto' (the direct 'plan' mock answers earlier)
             t = datetime.date.today(); tm = (t + datetime.timedelta(days=1)).isoformat()
             return self.reply(200, {'choices': [{'message': {'content': json.dumps({'items': [{'kind': 'task', 'title': 'Email the editor', 'date': tm}, {'kind': 'habit', 'title': 'Read daily'}]})}}]})
@@ -74,6 +75,15 @@ class MockAI(BaseHTTPRequestHandler):
                 'ask': 'You changed the prior because of the new data [1]. See also [9].',
             }[kind]
             return self.reply(200, {'choices': [{'message': {'content': out}}]})
+        if kind == 'gsteps':
+            t = datetime.date.today(); d = lambda n: (t + datetime.timedelta(days=n)).isoformat()
+            return self.reply(200, {'choices': [{'message': {'content': json.dumps({'steps': [{'title': 'Outline the argument', 'date': d(0)}, {'title': 'Write intro', 'date': d(1)}, {'title': 'Draft results', 'date': '2099-01-01'}, {'title': ''}, {'title': 'Existing step'}]})}}]})
+        if kind == 'glink':  # ties tasks that mention a paper to the paper goal, like a model reading titles
+            user = body['messages'][-1]['content']; head, _, rest = user.partition('## Open tasks')
+            goal = next((l.split(' | ')[0] for l in head.splitlines() if ' | ' in l and 'Paper' in l), '')
+            tasks = [l.split(' | ')[:2] for l in rest.splitlines() if ' | ' in l]
+            links = [{'task': i, 'goal': goal if 'paper' in n.lower() else ''} for i, n in tasks] + [{'task': 'nope', 'goal': goal}, {'task': tasks[0][0] if tasks else '', 'goal': 'bogus'}]
+            return self.reply(200, {'choices': [{'message': {'content': json.dumps({'links': links})}}]})
         if kind == 'junk':
             return self.reply(200, {'choices': [{'message': {'content': 'Sure! I organised it nicely for you.'}}]})
         if kind in ('ok', 'openrouter'):
@@ -128,16 +138,17 @@ def auto_wait(pg, timeout=10):
     pg.wait_for_timeout(150); until(pg, '() => !LB.AUTO.running && !LB.AUTO.busy', timeout); pg.wait_for_timeout(200)
 
 # =====================================================================
-@test('Start', 'Opens on Home: five tabs, no errors, no example data, a calm empty brief')
+@test('Start', 'Opens on Home: every screen in the menu, no errors, no example data, a calm brief that asks for a first goal')
 def _(pg, ctx):
     open_app(pg, '')
     items = pg.eval_on_selector_all('.drawer-panel .nav-item b', 'els => els.map(e => e.textContent)')
-    check(items == ['Home', 'Today', 'Calendar', 'Notes', 'Progress', 'How it works', 'Settings'], f'menu {items}')
+    check(items == ['Home', 'Today', 'Calendar', 'Goals', 'Notes', 'Progress', 'How it works', 'Settings'], f'menu {items}')
     check(count(pg, '.tabbar, .tab') == 0 and count(pg, '[aria-label=Settings]') == 0, 'no bottom tabs and no gear on screens')
     check(ev(pg, '() => LB.route.name') == 'home', 'should start on Home')
     check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
     check(pg.inner_text('.headline').startswith('The whole day is yours'), pg.inner_text('.headline'))
     check('Nothing needs you' in pg.inner_text('.brief-bottom'), 'calm line missing')
+    check('Tell your brain what you want' in pg.inner_text('#heading') and count(pg, '#heading [data-action=goal-new]') == 1, 'Home should invite a first goal')
     check(count(pg, '.terrain .ridge') == 1 and count(pg, '.terrain .now') <= 1, 'drawing')
     check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '() => document.fonts.check("600 30px Fraunces")'), 'serif headline font')
 
@@ -157,7 +168,7 @@ def _(pg, ctx):
     check(not ev(pg, "() => document.documentElement.classList.contains('menu-open')"), 'Escape')
     pg.click('.menu-btn'); pg.wait_for_timeout(250); pg.mouse.click(380, 400); pg.wait_for_timeout(250)
     check(not ev(pg, "() => document.documentElement.classList.contains('menu-open')"), 'backdrop')
-    for v in ['today', 'notes', 'progress', 'settings']:
+    for v in ['today', 'goals', 'notes', 'progress', 'settings']:
         go(pg, v); check(count(pg, 'main .menu-btn') == 1, f'{v} has no menu button')
 
 @test('Start', 'First open shows How it works once; it can be opened again from the menu', intro=True)
@@ -359,17 +370,168 @@ def _(pg, ctx):
     pg.click('.note'); pg.click('#note-del'); pg.wait_for_timeout(200)
     check(len(recs(pg, 'note')) == 1, 'delete failed')
 
-@test('Goals', 'Add a goal, +1, correct the count, reach it')
+@test('Goals', 'Home invites a first goal; only its name is needed; it opens straight to a first step, which ties to it; Mark done, with Undo')
 def _(pg, ctx):
-    open_app(pg, 'progress')
-    pg.click('[data-action=goal-new]'); pg.fill('.sheet input[name=title]', 'Read books'); pg.fill('.sheet input[name=target]', '3'); pg.fill('.sheet input[name=unit]', 'books')
-    pg.click('.sheet .btn.primary'); sheet_closed(pg)
-    pg.click('[data-action=goal-inc]'); pg.wait_for_timeout(120)
-    check('1 / 3 books' in pg.inner_text('.goal'), pg.inner_text('.goal'))
-    pg.click('.goal-main'); pg.fill('.sheet input[name=now]', '2'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
-    check('2 / 3 books' in pg.inner_text('.goal'), 'correction')
-    pg.click('[data-action=goal-inc]'); pg.wait_for_timeout(150)
-    check('Goal reached' in pg.inner_text('#toast') and count(pg, '.goal.done') == 1, 'goal reached')
+    open_app(pg, '')
+    pg.click('#heading [data-action=goal-new]'); pg.wait_for_selector('.sheet input[name=title]')
+    check(pg.inner_text('.sheet').count('(optional)') == 3, 'only the first question should be needed')
+    pg.fill('.sheet input[name=title]', 'Finish Paper 2'); pg.fill('.sheet textarea[name=why]', 'Get it out before the conference')
+    pg.click('.sheet .chip:has-text("In a month")')
+    check(pg.input_value('#goal-by') == add_days(pg, 30), 'by-when chip')
+    pg.click('.sheet .btn.primary'); pg.wait_for_selector('#goal-step-in')
+    check('Goal added' in pg.inner_text('#toast') and 'Needs a next step' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
+    g = recs(pg, 'goal')[0]
+    check(g['target'] == 0 and g['by'] == add_days(pg, 30) and g['why'].startswith('Get it out'), g)
+    pg.fill('#goal-step-in', 'Write intro tomorrow'); pg.press('#goal-step-in', 'Enter'); pg.wait_for_timeout(250)
+    x = recs(pg, 'task')
+    check(len(x) == 1 and x[0]['title'] == 'Write intro' and x[0]['date'] == add_days(pg, 1) and x[0]['goalId'] == g['id'], x)
+    check('Write intro' in pg.inner_text('#goal-steps') and ev(pg, '() => document.activeElement.id') == 'goal-step-in', 'step list and focus')
+    pg.fill('#goal-step-in', 'Make figures'); pg.press('#goal-step-in', 'Enter'); pg.wait_for_timeout(250)
+    pg.click('#goal-steps .circle >> nth=0'); pg.wait_for_timeout(300)
+    check('1 step done' in pg.inner_text('.sheet') and '1 of 2 steps done' in pg.inner_text('.sheet') and 'On track' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
+    pg.click('.sheet .btn.primary[data-action=sheet-close]'); sheet_closed(pg)
+    go(pg, 'today')
+    check('Finish Paper 2' in pg.inner_text('.tgoal'), 'a task shows its goal')
+    go(pg, 'goals')
+    check(count(pg, '.gcard') == 1 and '1 of 2 steps done' in pg.inner_text('.gcard') and 'On track' in pg.inner_text('.gcard'), pg.inner_text('main'))
+    pg.click('.gcard-main'); pg.wait_for_selector('.gstate.big'); pg.click('.sheet [data-action=goal-done]'); sheet_closed(pg)
+    check('Goal done' in pg.inner_text('#toast') and 'Every goal is done' in pg.inner_text('main'), 'mark done')
+    pg.click('#toast-action'); pg.wait_for_timeout(250)
+    check(count(pg, '.gcard') == 1 and not recs(pg, 'goal')[0]['done'], 'undo')
+
+@test('Goals', 'Goals screen: examples to start from; a counting goal gets +1, a corrected count, and moves to Done when reached')
+def _(pg, ctx):
+    open_app(pg, 'goals')
+    check('Add your first goal' in pg.inner_text('main') and count(pg, '[data-action=goal-example]') == 4, 'empty state')
+    pg.click('[data-action=goal-example]:has-text("Read books")'); pg.wait_for_selector('.sheet input[name=title]')
+    check(pg.input_value('.sheet input[name=title]') == 'Read books' and pg.input_value('.sheet input[name=target]') == '12' and pg.input_value('#goal-by').endswith('-12-31'), 'example fills the form')
+    pg.fill('.sheet input[name=target]', '3'); pg.click('.sheet .btn.primary'); pg.wait_for_selector('.gstate.big')
+    pg.click('.sheet .btn.primary[data-action=sheet-close]'); sheet_closed(pg)
+    pg.click('.gcard [data-action=goal-inc]'); pg.wait_for_timeout(150)
+    check('1 of 3 books' in pg.inner_text('.gcard'), pg.inner_text('.gcard'))
+    pg.click('.gcard-main'); pg.wait_for_selector('.gstate.big'); pg.click('.sheet [data-action=goal-edit]')
+    pg.fill('.sheet input[name=now]', '2'); pg.click('.sheet .btn.primary'); pg.wait_for_selector('.gstate.big')
+    pg.click('.sheet .btn.primary[data-action=sheet-close]'); sheet_closed(pg)
+    check('2 of 3 books' in pg.inner_text('.gcard'), 'correction')
+    pg.click('.gcard [data-action=goal-inc]'); pg.wait_for_timeout(150)
+    check('Goal reached' in pg.inner_text('#toast') and 'Every goal is done' in pg.inner_text('main') and count(pg, '.fold[data-k=goalsDone]') == 1, 'reached goal moves to Done')
+
+@test('Goals', 'Tasks and habits are tied to a goal from their own sheet; the picker only shows once a goal exists')
+def _(pg, ctx):
+    open_app(pg)
+    add_task(pg, 'Draft abstract'); pg.click('.task-main'); pg.wait_for_selector('.sheet input[name=title]')
+    check(count(pg, '.sheet select[name=goalId]') == 0, 'no picker without goals')
+    ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
+    gid = ev(pg, "async () => (await put({type:'goal', title:'Paper 2', target:0, log:{}})).id")
+    pg.click('.task-main'); pg.wait_for_selector('.sheet select[name=goalId]')
+    pg.select_option('.sheet select[name=goalId]', label='Paper 2'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    check(recs(pg, 'task')[0]['goalId'] == gid and 'Paper 2' in pg.inner_text('.tgoal'), 'task tied')
+    go(pg, 'progress'); pg.click('[data-action=habit-new]'); pg.wait_for_selector('.sheet select[name=goalId]')
+    pg.fill('.sheet input[name=title]', 'Write 30 minutes'); pg.select_option('.sheet select[name=goalId]', label='Paper 2'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    check(recs(pg, 'habit')[0]['goalId'] == gid, 'habit tied')
+    go(pg, 'goals'); pg.click('.gcard-main'); pg.wait_for_selector('.gstate.big')
+    check('Write 30 minutes' in pg.inner_text('.sheet') and 'Draft abstract' in pg.inner_text('#goal-steps'), 'goal shows its steps and habits')
+
+@test('Heading', 'Where you’re heading: finished work by goal, the goal behind its date named first, its fix, and rows that open the goal')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, """async () => { const t = today();
+      const a = await put({type:'goal', title:'Paper 2', target:0, by:addDays(t,5), log:{}});
+      const b = await put({type:'goal', title:'Get fit', target:0, log:{}});
+      for (let i = 1; i <= 2; i++) await put({type:'task', title:'P'+i, date:addDays(t,-i), done:true, doneDate:addDays(t,-i), goalId:a.id});
+      for (let i = 0; i < 6; i++) await put({type:'task', title:'P open '+i, date:addDays(t,i), done:false, goalId:a.id});
+      await put({type:'task', title:'Gym', date:addDays(t,-3), done:true, doneDate:addDays(t,-3), goalId:b.id});
+      await put({type:'task', title:'Gym again', date:addDays(t,1), done:false, goalId:b.id});
+      for (let i = 1; i <= 3; i++) await put({type:'task', title:'Misc'+i, date:addDays(t,-i), done:true, doneDate:addDays(t,-i)}); }""")
+    pg.wait_for_timeout(150)
+    line = pg.inner_text('#heading-line')
+    check(line.startswith('At this pace “Paper 2” lands') and 'deadline' in line, line)
+    check(count(pg, '.hbar i') == 3 and pg.locator('.hlist .hnum').all_inner_texts() == ['2', '1', '3'], pg.inner_text('#heading'))
+    check('Behind' in pg.inner_text('.hrow-goal:has-text("Paper 2")') and 'On track' in pg.inner_text('.hrow-goal:has-text("Get fit")'), pg.inner_text('#heading'))
+    fx = pg.inner_text('#fixes')
+    check('“Paper 2” is behind' in fx and 'about 9 steps a week' in fx and 'Open goal' in fx, fx)
+    check(pg.locator('.brief-bottom section').first.get_attribute('id') == 'heading', 'heading comes first on Home')
+    pg.click('.hrow-goal:has-text("Paper 2")'); pg.wait_for_selector('.gstate.big')
+    check('To make the date, about 9 steps a week; lately 0.5.' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
+
+@test('Heading', 'Fixes: a stalled goal gets its next step put on tomorrow in one tap, with Undo; a task moved again and again opens; Not now hides a fix for a week')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, """async () => { const t = today();
+      const g = await put({type:'goal', title:'Learn Spanish', target:0, log:{}});
+      await put({id:'l3', type:'task', title:'Lesson 3', date:'', done:false, goalId:g.id});
+      await put({type:'task', title:'Lesson 2', date:addDays(t,-14), done:true, doneDate:addDays(t,-14), goalId:g.id});
+      await put({id:'tx', type:'task', title:'Tax forms', date:addDays(t,-1), done:false, moved:4}); }""")
+    pg.wait_for_timeout(150)
+    check(pg.inner_text('#heading-line') == '“Learn Spanish” hasn’t moved in 14 days.', pg.inner_text('#heading-line'))
+    fx = pg.inner_text('#fixes')
+    check('Get “Learn Spanish” moving' in fx and 'Put “Lesson 3” on tomorrow?' in fx and '“Tax forms” keeps getting moved' in fx, fx)
+    pg.click('li[data-fix^="stall-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
+    check(ev(pg, "() => get('l3').date") == add_days(pg, 1) and 'is on tomorrow' in pg.inner_text('#toast'), 'applied')
+    check(count(pg, 'li[data-fix^="stall-"]') == 0, 'a scheduled step is not a stall to fix')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check(ev(pg, "() => get('l3').date") == '' and count(pg, 'li[data-fix^="stall-"]') == 1, 'undo')
+    pg.click('li[data-fix^="split-"] [data-action=fix-apply]'); pg.wait_for_selector('.sheet input[name=title]')
+    check(pg.input_value('.sheet input[name=title]') == 'Tax forms', 'without AI it opens the task')
+    ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
+    pg.click('li[data-fix^="split-"] [data-action=fix-dismiss]'); pg.wait_for_timeout(250)
+    check(count(pg, 'li[data-fix^="split-"]') == 0 and ev(pg, "() => S.settings.fixSnooze['split-tx']") == add_days(pg, 7), 'Not now')
+    reload(pg); pg.wait_for_timeout(200)
+    check(count(pg, 'li[data-fix^="split-"]') == 0 and count(pg, 'li[data-fix^="stall-"]') == 1, 'snooze kept after reload')
+
+@test('Heading', 'Fixes: a day fuller than usual offers to move the newest loose tasks to later this week; tasks tied to goals stay; Undo')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, """async () => { const t = today();
+      for (let i = 0; i < 14; i++) await put({type:'task', title:'Done '+i, date:addDays(t,-i), done:true, doneDate:addDays(t,-i)});
+      const g = await put({type:'goal', title:'Paper 2', target:0, log:{}});
+      await put({type:'task', title:'G step', date:t, done:false, goalId:g.id});
+      for (let i = 0; i < 5; i++) await put({type:'task', title:'L'+i, date:t, done:false}); }""")
+    pg.wait_for_timeout(150)
+    fx = pg.inner_text('li[data-fix^="lighten-"]')
+    check('Today is fuller than your usual day' in fx and 'You finish about 1 a day and today has 6' in fx and 'Move 5 to later this week' in fx, fx)
+    pg.click('li[data-fix^="lighten-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
+    t = T(pg); tasks = [x for x in recs(pg, 'task') if not x['done']]
+    check([x['title'] for x in tasks if x['date'] == t] == ['G step'], [(x['title'], x['date']) for x in tasks])
+    check(sorted(x['date'] for x in tasks if x['title'] != 'G step') == [add_days(pg, i) for i in range(1, 6)] and all(x['moved'] == 1 for x in tasks if x['title'] != 'G step'), 'spread over the coming days')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check(all(x['date'] == t for x in recs(pg, 'task') if not x['done']), 'undo')
+
+@test('AI', 'Plan steps for a goal from a Home fix: steps come tied to the goal, never past its date, without repeats; Undo')
+def _(pg, ctx):
+    open_app(pg, '')
+    gid = ev(pg, """async () => { const t = today(); const g = await put({type:'goal', title:'Paper 2', why:'Conference', target:0, by:addDays(t,3), log:{}});
+      await put({type:'task', title:'Existing step', date:addDays(t,-1), done:true, doneDate:addDays(t,-1), goalId:g.id}); return g.id; }""")
+    ai_setup(pg, 'gsteps'); pg.wait_for_timeout(150)
+    check('✦ Plan steps' in pg.inner_text('li[data-fix^="steps-"]'), pg.inner_text('#fixes'))
+    AI_LOG.clear(); pg.click('li[data-fix^="steps-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error', timeout=10000)
+    sent = posts()[0]['body']['messages']
+    check(len(posts()) == 1 and sent[0]['content'].startswith('Plan the next concrete steps') and 'Goal: Paper 2' in sent[-1]['content'] and 'Existing step' in sent[-1]['content'], 'request')
+    check(count(pg, '.org-item') == 3 and pg.input_value('.org-item:nth-child(3) input[type=date]') == add_days(pg, 3), pg.inner_text('#tool-result'))
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(200)
+    steps = [x for x in recs(pg, 'task') if not x['done']]
+    check(len(steps) == 3 and all(x['goalId'] == gid for x in steps) and 'Added 3 steps to “Paper 2”' in pg.inner_text('#toast'), steps)
+    check(count(pg, 'li[data-fix^="steps-"]') == 0, 'fix gone once there are steps')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check(not [x for x in recs(pg, 'task') if not x['done']], 'undo')
+
+@test('AI', 'Tie tasks to goals: the AI matches loose tasks to goals, unknown ids are ignored, you can change a goal before Apply')
+def _(pg, ctx):
+    open_app(pg, '')
+    ids = ev(pg, """async () => { const t = today(); const a = await put({type:'goal', title:'Paper 2', target:0, log:{}}); const b = await put({type:'goal', title:'Get fit', target:0, log:{}});
+      await put({id:'tA', type:'task', title:'Write paper intro', date:t, done:false}); await put({id:'tB', type:'task', title:'Paper figures', date:'', done:false});
+      await put({id:'tC', type:'task', title:'Buy milk', date:'', done:false}); await put({id:'tD', type:'task', title:'Old tied one', date:'', done:false, goalId:a.id}); return [a.id, b.id]; }""")
+    ai_setup(pg, 'glink'); pg.wait_for_timeout(150)
+    fx = pg.inner_text('li[data-fix^="link-"]')
+    check('3 open tasks aren’t tied to a goal' in fx and '✦ Tie to goals' in fx, fx)
+    AI_LOG.clear(); pg.click('li[data-fix^="link-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error, #rev-empty', timeout=10000)
+    user = posts()[0]['body']['messages'][-1]['content']
+    check('Buy milk' in user and 'Old tied one' not in user, user)
+    check(count(pg, '.org-item') == 2, pg.inner_text('#tool-result'))
+    pg.select_option('.org-item:nth-child(2) select', label='Get fit'); pg.wait_for_timeout(100)
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(200)
+    g = {x['id']: x.get('goalId', '') for x in recs(pg, 'task')}
+    check(g['tA'] == ids[0] and g['tB'] == ids[1] and g['tC'] == '' and 'Tied 2 tasks to goals' in pg.inner_text('#toast'), g)
 
 @test('Progress', 'Week numbers: tasks done, habits only counted since they were added, overdue now')
 def _(pg, ctx):
@@ -441,22 +603,29 @@ def _(pg, ctx):
     sent = [l for l in AI_LOG if l['method'] == 'POST'][0]['body']['messages']
     check(sent[0]['content'].startswith('You turn one person') and sent[1]['content'] in prev, 'request differs from preview')
     rows = pg.locator('.org-item')
-    check(rows.count() == 7, f'{rows.count()} rows: junk kinds and empty titles must be dropped')
-    kinds = pg.eval_on_selector_all('.org-item select', 'els => els.map(e => e.value)')
-    check(kinds == ['task', 'event', 'habit', 'goal', 'task', 'habit', 'task'], kinds)
+    check(rows.count() == 8, f'{rows.count()} rows: junk kinds and empty titles must be dropped')
+    kinds = pg.eval_on_selector_all('.org-top select', 'els => els.map(e => e.value)')
+    check(kinds == ['task', 'event', 'habit', 'goal', 'task', 'habit', 'task', 'goal'], kinds)
+    check(pg.input_value('.org-item:nth-child(1) select.org-goal') == 'Finish thesis', 'task should show its goal')
+    check(count(pg, '.org-item:nth-child(2) select.org-goal') == 0, 'events have no goal')
     check(not pg.is_checked('.org-item:nth-child(6) .org-on') and 'Already in your app' in rows.nth(5).inner_text(), 'duplicate Walk should start unticked')
     check(not ev(pg, '() => window.__xss4'), 'markup ran')
     pg.uncheck('.org-item:nth-child(7) .org-on')
-    pg.select_option('.org-item:nth-child(5) select', 'habit'); pg.wait_for_timeout(100)
+    pg.select_option('.org-item:nth-child(5) .org-top select', 'habit'); pg.wait_for_timeout(100)
     pg.fill('.org-item:nth-child(1) .org-title', 'Finish chapter 3 draft')
-    check(pg.inner_text('#org-add') == 'Add 5', pg.inner_text('#org-add'))
+    pg.select_option('.org-item:nth-child(3) select.org-goal', 'Read books')
+    check(pg.inner_text('#org-add') == 'Add 6', pg.inner_text('#org-add'))
     pg.click('#org-add'); sheet_closed(pg); pg.wait_for_timeout(200)
     tasks, evs, habits, goals = recs(pg, 'task'), recs(pg, 'event'), recs(pg, 'habit'), recs(pg, 'goal')
     check([t['title'] for t in tasks] == ['Finish chapter 3 draft'] and tasks[0]['date'] == add_days(pg, 1) and 'Brain dump' in tasks[0]['note'], tasks)
     check(len(evs) == 1 and evs[0]['time'] == '11:00' and evs[0]['end'] == '11:30' and evs[0]['date'] == add_days(pg, 1), evs)
     check(sorted(h['title'] for h in habits) == ['Dentist sometime', 'Gym (Mon/Wed/Fri)', 'Walk'], habits)
-    check(len(goals) == 1 and goals[0]['target'] == 12 and goals[0]['unit'] == 'books', goals)
-    check('Added 1 task, 1 event, 2 habits and 1 goal' in pg.inner_text('#toast'), pg.inner_text('#toast'))
+    gb = {g['title']: g for g in goals}
+    check(len(goals) == 2 and gb['Read books']['target'] == 12 and gb['Read books']['unit'] == 'books' and gb['Finish thesis']['target'] == 0, goals)
+    check(tasks[0]['goalId'] == gb['Finish thesis']['id'], 'task not tied to the new goal')
+    hb = {h['title']: h for h in habits}
+    check(hb['Gym (Mon/Wed/Fri)']['goalId'] == gb['Read books']['id'] and not hb['Dentist sometime'].get('goalId'), 'habit goal choice')
+    check('Added 1 task, 1 event, 2 habits and 2 goals' in pg.inner_text('#toast'), pg.inner_text('#toast'))
     check(len(recs(pg, 'note')) == 1, 'the note itself stays')
     pg.click('#toast-action'); pg.wait_for_timeout(300)
     check(len(recs(pg, 'task')) == 0 and len(recs(pg, 'event')) == 0 and len(recs(pg, 'habit')) == 1 and len(recs(pg, 'goal')) == 0, 'undo')
@@ -585,7 +754,7 @@ def _(pg, ctx):
     check(recs(pg, 'task')[0]['date'] == add_days(pg, -3), 'nothing should change by itself')
     go(pg, 'home')
     check('Supervisor call at 11' in pg.inner_text('#home-line'), 'today line')
-    need = pg.inner_text('.blist.need')
+    need = pg.inner_text('#fixes')
     check('What to do with 4 overdue tasks' in need, need)
     pg.click('.bi-title:has-text("What to do with")'); pg.wait_for_selector('#rev-list')
     check('Your AI prepared this' in pg.inner_text('.sheet'), 'says it was prepared earlier')
@@ -624,7 +793,7 @@ def _(pg, ctx):
     titles = [n['title'] for n in recs(pg, 'note')]
     check(any(x.startswith('Look back · ') for x in titles), titles)
     go(pg, 'home')
-    need = pg.inner_text('.blist.need')
+    need = pg.inner_text('#fixes')
     check('Your weekly look back is ready' in need and 'A plan for this week' in need, need)
     pg.click('.bi-title:has-text("A plan for this week")'); pg.wait_for_selector('#rev-list')
     pg.click('[data-action=pending-dismiss]'); sheet_closed(pg); pg.wait_for_timeout(200)
@@ -741,7 +910,7 @@ def _(pg, ctx):
 def _(pg, ctx):
     open_app(pg)
     check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#b5532f', '#e07a52'), 'not clay')
-    for v in ['today', 'calendar', 'notes', 'progress', 'settings']:
+    for v in ['today', 'calendar', 'goals', 'notes', 'progress', 'settings']:
         go(pg, v)
         check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.top h1')).fontFamily"), f'{v} title not serif')
     check(ev(pg, "() => mergeSettings({accent:'blue'}).accent") == 'clay' and ev(pg, "() => mergeSettings({accent:'blue', look:2}).accent") == 'blue' and ev(pg, "() => mergeSettings({accent:'green'}).accent") == 'green', 'accent migration')
@@ -811,9 +980,11 @@ def _(pg, ctx):
             p2.goto(BASE + '/'); p2.wait_for_selector('html[data-ready="1"]', state='attached')
             ev(p2, """async () => { const t = today(); await put({type:'event', title:'E', date:t, time:'09:00'}); await put({type:'task', title:'Old', date:addDays(t,-2), done:false});
               await put({type:'task', title:'Done', date:t, done:true, doneDate:t}); await put({type:'habit', title:'H', log:{}}); await put({type:'goal', title:'G', target:3, log:{}});
+              const g = await put({type:'goal', title:'Paper', target:0, by:addDays(t,10), log:{}}); await put({type:'task', title:'Step', date:t, done:false, goalId:g.id});
+              await put({type:'task', title:'Did', date:addDays(t,-1), done:true, doneDate:addDays(t,-1), goalId:g.id});
               await put({type:'note', title:'N', body:'b'}); }""")
             bad = []
-            for v in ['home', 'today', 'calendar', 'notes', 'progress', 'settings']:
+            for v in ['home', 'today', 'calendar', 'goals', 'notes', 'progress', 'settings']:
                 n, s_ = (v.split('-') + [''])[:2]; ev(p2, f"() => LB.go('{n}', '{s_}')"); p2.wait_for_timeout(120)
                 p2.add_script_tag(content=src)
                 r = ev(p2, "async () => (await axe.run(document, {runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']})).violations.map(v => v.id + ' ×' + v.nodes.length + ' ' + v.nodes[0].target.join(' '))")
@@ -826,8 +997,8 @@ def _(pg, ctx):
 def _(pg, ctx):
     pg.set_viewport_size({'width': 360, 'height': 740})
     open_app(pg)
-    ev(pg, "async () => { await put({type:'task', title:'A very long task title that goes on and on and on to test wrapping across the line', date: today(), done:false}); await put({type:'habit', title:'Meditate for ten minutes', log:{}}); await put({type:'goal', title:'Run a long distance goal', target: 100, unit:'kilometres', log:{}}); }")
-    for v in ['home', 'today', 'calendar', 'notes', 'progress', 'settings']:
+    ev(pg, "async () => { await put({type:'task', title:'A very long task title that goes on and on and on to test wrapping across the line', date: today(), done:false}); await put({type:'habit', title:'Meditate for ten minutes', log:{}}); await put({type:'goal', title:'Run a long distance goal', target: 100, unit:'kilometres', log:{}}); const g = await put({type:'goal', title:'Finish the extremely long paper about fractal geometry', target:0, by:addDays(today(),5), log:{}}); for (let i = 0; i < 9; i++) await put({type:'task', title:'Task number '+i+' with a long name', date: today(), done:false, moved: i}); await put({type:'task', title:'Old step', date:addDays(today(),-20), done:false, goalId:g.id}); }")
+    for v in ['home', 'today', 'calendar', 'goals', 'notes', 'progress', 'settings']:
         n, s = (v.split('-') + [''])[:2]
         go(pg, n, s)
         w = ev(pg, '() => document.documentElement.scrollWidth')
@@ -852,8 +1023,10 @@ def _(pg, ctx):
     open_app(pg)
     add_task(pg, '<img src=x onerror="window.__x=1">')
     ev(pg, """() => put({type:'note', title:'<b>t</b>', body:'<script>window.__y=1</script>'})""")
-    for v in ['home', 'today', 'calendar', 'notes', 'progress']: go(pg, v)
-    check(not ev(pg, '() => window.__x || window.__y'), 'HTML ran')
+    ev(pg, """async () => { const g = await put({type:'goal', title:'<img src=x onerror="window.__z=1">', why:'<b>w</b>', target:0, log:{}}); await put({type:'task', title:'s', date:today(), done:false, goalId:g.id}); }""")
+    for v in ['home', 'today', 'calendar', 'goals', 'notes', 'progress']: go(pg, v)
+    go(pg, 'goals'); pg.click('.gcard-main'); pg.wait_for_timeout(300)
+    check(not ev(pg, '() => window.__x || window.__y || window.__z'), 'HTML ran')
 
 # ---------- runner ----------
 def serve(handler, port):
