@@ -223,7 +223,30 @@ def _(pg, ctx):
     go(pg, 'notes')
     check(count(pg, '.seg') == 0 and 'Journal · Oct 5, 2026' in pg.inner_text('.notes'), 'notes list')
     pg.click('.note'); pg.wait_for_selector('#note-title')
-    check('Written Monday, October 5, 2026' in pg.inner_text('.sheet'), pg.inner_text('.sheet')[:200])
+    check(pg.input_value('#note-date') == '2026-10-05', 'journal note should belong to its day')
+
+@test('Notes', 'A note can be for another day: pick Tomorrow, it shows on that day, and Home brings it up')
+def _(pg, ctx):
+    open_app(pg, 'notes')
+    pg.click('.fab'); pg.wait_for_selector('#note-date')
+    check(pg.input_value('#note-date') == T(pg), 'new note should default to today')
+    pg.click('[data-action=note-day]:has-text("Tomorrow")')
+    pg.fill('#note-title', 'Ask about the prior'); pg.fill('#note-body', 'Why the fit moved'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    n = recs(pg, 'note')[0]
+    check(n['date'] == add_days(pg, 1), f'saved for {n["date"]}')
+    check('Tomorrow' in pg.inner_text('.note-date'), 'card should say Tomorrow')
+    go(pg, 'calendar', add_days(pg, 1))
+    check('Ask about the prior' in pg.inner_text('.agenda'), 'not on tomorrow')
+    go(pg, 'calendar', T(pg))
+    check('Ask about the prior' not in pg.inner_text('.agenda'), 'still on today')
+    go(pg, 'home')
+    check('Ask about the prior' in pg.inner_text('.blist.need') and 'A note for tomorrow' in pg.inner_text('.blist.need'), 'Home should mention it')
+    pg.click('.bi-title:has-text("Ask about the prior")'); pg.wait_for_selector('#note-title')
+    check(pg.input_value('#note-title') == 'Ask about the prior', 'opens the note')
+    pg.click('[data-action=note-day]:has-text("Today")'); pg.wait_for_timeout(100); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    check(recs(pg, 'note')[0]['date'] == T(pg), 'moving an existing note to today')
+    go(pg, 'calendar', add_days(pg, 3)); pg.click('.agenda [data-action=note-new]'); pg.wait_for_selector('#note-date')
+    check(pg.input_value('#note-date') == add_days(pg, 3), 'Calendar + Note should use the picked day')
 
 @test('Calendar', 'Month grid, pick a day, add a task and an event there, dots appear, month arrows work')
 def _(pg, ctx):

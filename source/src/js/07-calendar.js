@@ -28,7 +28,7 @@ function dayAgenda(D, d, t) {
   const habits = D.habits.filter((h) => habitDone(h, d)), notes = notesOn(D, d);
   const rel = relDate(d, t), title = ['Today', 'Tomorrow', 'Yesterday'].includes(rel) ? `${rel} · ${fmtDate(d, { month: 'short', day: 'numeric' })}` : fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' });
   return `<section class="card agenda">${sectionH(esc(title),
-      `<div class="sec-btns"><button class="pill" data-action="event-new" data-date="${d}">${icon('plus')}Event</button></div>`)}
+      `<div class="sec-btns"><button class="pill" data-action="note-new" data-date="${d}">${icon('plus')}Note</button><button class="pill" data-action="event-new" data-date="${d}">${icon('plus')}Event</button></div>`)}
     ${events.map(eventRow).join('')}
     ${addTaskForm(d, 'add-cal', 'Add a task for this day')}
     ${tasks.map((x) => taskRow(x, t, { showDate: false })).join('')}
