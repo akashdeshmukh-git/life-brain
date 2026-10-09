@@ -2,8 +2,9 @@
 
 Tasks, calendar, notes, journal, habits and goals in one simple app, with an optional AI that looks for patterns. Everything stays on your phone. There's no account and no server.
 
-## The four tabs
+## The five tabs
 
+- **Home.** A 30-second look at the day, opened first. One line sums up the day, the calendar is drawn as a line that rises where the day is fuller (a sun marks open time, a clay dot marks now), and morning, afternoon and evening each get a sentence. Below: **Needs attention** (overdue and today's tasks, tomorrow's events, streaks not yet ticked, goals nearly done), **Already sorted** (what got done, habits kept, yesterday's journal) and up to two **Worth knowing** patterns. Tap any bold title to open it. Add your name in Settings and the headline uses it.
 - **Today.** Today's tasks: type to add one, tap the circle to tick it off. Undated tasks sit under *Anytime*. Below them are your habits (tap to tick) and one journal box with a mood.
 - **Calendar.** The month. Tap a day to see and add its tasks and events, and to read or write that day's journal. Swipe sideways to change month.
 - **Notes.** Notes you can search and pin. The *Journal* switch lists every journal entry.
@@ -29,4 +30,4 @@ Open https://akashdeshmukh-git.github.io/life-brain/ in Chrome on Android, then 
 
 Inside `source`: `node build.mjs` writes `dist/pwa`. `python3 tests/run.py` runs the browser tests (needs Python Playwright with Chromium).
 
-Inter is a free font under the SIL Open Font License. Its licence is in `licenses/`.
+Inter and Fraunces are free fonts under the SIL Open Font License. Their licences are in `licenses/`.

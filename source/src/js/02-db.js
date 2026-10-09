@@ -3,6 +3,7 @@ const TYPES = ['task', 'event', 'note', 'journal', 'habit', 'goal'];
 const DB_NAME = 'lifebrain2';
 const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
+  name: '',
   accent: 'blue',
   ai: { active: 'auto', linked: [], models: {}, baseUrls: {}, timeoutSec: 60, rememberKeys: false },
 };
@@ -123,7 +124,7 @@ function fromOld(records, profile) {
       const note = [r.firstStep && 'First step: ' + r.firstStep, r.why].filter(Boolean).join('\n');
       out.push({ ...base(r), type: 'task', title: String(r.title || 'Task'), done, doneDate: done ? r.doneDate || r.statusDate || '' : '', date: isYmd(r.plannedDate) ? r.plannedDate : done && isYmd(r.doneDate) ? r.doneDate : '', note, moved: Number(r.deferrals) || 0 });
     } else if (r.type === 'event' && isYmd(r.date)) {
-      out.push({ ...base(r), type: 'event', title: String(r.title || 'Event'), date: r.date, time: r.allDay ? '' : /^\d{1,2}:\d{2}$/.test(r.start || '') ? r.start : '', note: [r.location, r.notes].filter(Boolean).join('\n') });
+      out.push({ ...base(r), type: 'event', title: String(r.title || 'Event'), date: r.date, time: r.allDay ? '' : /^\d{1,2}:\d{2}$/.test(r.start || '') ? r.start : '', end: !r.allDay && /^\d{1,2}:\d{2}$/.test(r.end || '') ? r.end : '', note: [r.location, r.notes].filter(Boolean).join('\n') });
     } else if (r.type === 'habit') {
       const log = {};
       for (const [d, v] of Object.entries(r.log || {})) if (isYmd(d) && v) log[d] = true;

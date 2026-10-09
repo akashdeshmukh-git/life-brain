@@ -102,7 +102,8 @@ function eventSheet(e, date = today()) {
   openSheet({ title: e ? 'Event' : 'New event', body: `<form class="form" data-form="event" data-id="${e ? e.id : ''}">
     <label class="field"><span>Event</span><input name="title" value="${esc(r.title)}" maxlength="300" required autocomplete="off"></label>
     <div class="two"><label class="field"><span>Date</span><input type="date" name="date" value="${esc(r.date)}" required></label>
-      <label class="field"><span>Time</span><input type="time" name="time" value="${esc(r.time || '')}"></label></div>
+      <label class="field"><span>Starts</span><input type="time" name="time" value="${esc(r.time || '')}"></label></div>
+    <label class="field"><span>Ends <small>(optional)</small></span><input type="time" name="end" value="${esc(r.end || '')}"></label>
     <label class="field"><span>Note</span><textarea name="note" rows="2" maxlength="4000">${esc(r.note || '')}</textarea></label>
     <p class="err" data-form-error></p>
     <div class="row-end">${e ? `<button type="button" class="btn danger" data-action="delete" data-id="${e.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
@@ -112,7 +113,7 @@ F.event = async (form, v) => {
   if (!title) throw new Error('Give the event a name.');
   if (!isYmd(v.date)) throw new Error('Pick a date.');
   const old = get(form.dataset.id);
-  await put({ ...(old || { type: 'event' }), title, date: v.date, time: /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.time : '', note: String(v.note || '').trim() });
+  await put({ ...(old || { type: 'event' }), title, date: v.date, time: /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.time : '', end: /^\d{1,2}:\d{2}$/.test(v.end || '') && /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.end : '', note: String(v.note || '').trim() });
   closeSheet();
 };
 
