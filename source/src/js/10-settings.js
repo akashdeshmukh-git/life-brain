@@ -7,7 +7,8 @@ VIEWS.settings = (sub) => {
   if (!snapCache) listSnapshots().then((l) => { snapCache = l; if (route.name === 'settings') render(); }).catch(() => { snapCache = []; });
   if (sub === 'ai') setTimeout(() => { const el = $('#ai-card'); if (el) el.scrollIntoView({ block: 'start' }); }, 0);
   const offline = !window.LB_PWA ? '' : LB.swState === 'ready' ? 'Works offline.' : LB.swState === 'error' ? 'Offline mode could not be set up.' : 'Setting up offline mode…';
-  return `<header class="top"><button class="icon-btn" data-action="nav" data-to="today" aria-label="Back">${icon('left')}</button><div class="top-text"><h1>Settings</h1></div></header>`
+  return `<header class="top"><button class="icon-btn" data-action="nav" data-to="home" aria-label="Back">${icon('left')}</button><div class="top-text"><h1>Settings</h1></div></header>`
+    + `<section class="card">${sectionH('You')}<label class="field"><span>Your name, for Home</span><input id="f-name" data-live="name" value="${esc(st.name || '')}" maxlength="40" autocomplete="given-name" placeholder="Optional"></label></section>`
     + `<section class="card">${sectionH('Look')}
       <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-selected="${st.theme === k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
       <div class="swatches" role="radiogroup" aria-label="Colour">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-action="set-accent" data-v="${k}" aria-checked="${st.accent === k}" aria-label="${a.name}" title="${a.name}" style="--c:${isDark() ? a.dark : a.light}"></button>`).join('')}</div></section>`
@@ -21,6 +22,7 @@ VIEWS.settings = (sub) => {
       <button class="btn danger block" data-action="wipe">Delete everything</button></section>`
     + `<p class="about"><img src="${LB.LOGO}" alt="" width="28" height="28">Life Brain · ${esc(LB.BUILD || 'dev')}</p>`;
 };
+document.addEventListener('change', (ev) => { if (ev.target.dataset && ev.target.dataset.live === 'name') saveSettings({ name: ev.target.value.trim() }).then(() => toast('Saved')).catch((e) => toast(e.message, 'bad')); });
 A['set-theme'] = async (el) => { await saveSettings({ theme: el.dataset.v }); applyTheme(); };
 A['set-accent'] = async (el) => { if (ACCENTS[el.dataset.v]) { await saveSettings({ accent: el.dataset.v }); applyTheme(); } };
 
@@ -176,6 +178,6 @@ A.wipe = async () => {
   if (!(await confirmSheet({ title: 'Delete everything?', text: 'Every task, event, note, journal entry, habit, goal, key and backup on this phone is erased. This can’t be undone.', confirmLabel: 'Delete everything', danger: true, requireText: 'DELETE' }))) return;
   await deleteEverything();
   snapCache = null;
-  go('today');
+  go('home');
   toast('Everything deleted');
 };

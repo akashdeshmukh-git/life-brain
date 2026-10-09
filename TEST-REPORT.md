@@ -1,12 +1,15 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **24 of 24 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **27 of 27 PASSED**.
 
 AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them).
 
 | Area | Test | Result |
 |---|---|---|
-| Start | Opens clean: four tabs, empty Today, no errors, no example data | PASSED |
+| Start | Opens on Home: five tabs, no errors, no example data, a calm empty brief | PASSED |
+| Start | Today still works as before | PASSED |
+| Home | Brief: headline with your name, the day as a line with one dot per event, three acts, what needs you and what is done | PASSED |
+| Home | A full day reads as a climb; events can have an end time | PASSED |
 | Tasks | Add, tick, undo and see done tasks fold away | PASSED |
 | Tasks | Edit a task: rename, note, push to tomorrow (counted as moved), delete with undo | PASSED |
 | Tasks | Overdue tasks show their date and move to today in one tap; "Anytime" holds undated tasks | PASSED |

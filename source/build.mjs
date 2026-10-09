@@ -6,7 +6,7 @@ const read = (p) => readFileSync(p, 'utf8');
 const b64 = (p) => readFileSync(p).toString('base64');
 const BUILD = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '').replace(/^(\d{8})/, '$1-');
 // Inter (SIL OFL), inlined so the app needs no network for fonts.
-const css = `@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Inter-Variable.woff2')}) format("woff2"); }\n` + read('src/style.css');
+const css = `@font-face { font-family: "Fraunces"; font-weight: 600; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Fraunces-600.woff2')}) format("woff2"); }\n@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Inter-Variable.woff2')}) format("woff2"); }\n` + read('src/style.css');
 const body = read('src/body.html');
 const files = readdirSync('src/js').filter((f) => f.endsWith('.js')).sort();
 const LOGO = 'data:image/png;base64,' + b64('src/logo.png');

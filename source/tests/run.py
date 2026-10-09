@@ -73,7 +73,7 @@ def test(category, name, **opts):
         TESTS.append((category, name, fn, opts)); return fn
     return deco
 
-def open_app(pg, h=''):
+def open_app(pg, h='today'):
     pg.goto(BASE + '/' + ('#' + h if h else ''))
     pg.wait_for_selector('html[data-ready="1"]', state='attached', timeout=15000)
 
@@ -93,15 +93,63 @@ def ai_setup(pg, kind='ok', key='sk-test-123'):
     ev(pg, f"""async () => {{ S.aiKeys = {{ openai: '{key}' }}; await saveSettings({{ ai: {{ active: 'openai', linked: ['openai'], baseUrls: {{ openai: '{AI_BASE}/{kind}/v1' }}, models: {{ openai: 'test-model' }}, timeoutSec: 5 }} }}); }}""")
 
 # =====================================================================
-@test('Start', 'Opens clean: four tabs, empty Today, no errors, no example data')
+@test('Start', 'Opens on Home: five tabs, no errors, no example data, a calm empty brief')
+def _(pg, ctx):
+    open_app(pg, '')
+    tabs = pg.locator('.tab').all_inner_texts()
+    check([t.strip() for t in tabs] == ['Home', 'Today', 'Calendar', 'Notes', 'Progress'], f'tabs {tabs}')
+    check(ev(pg, '() => LB.route.name') == 'home', 'should start on Home')
+    check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
+    check(pg.inner_text('.headline').startswith('The whole day is yours'), pg.inner_text('.headline'))
+    check('Nothing needs you' in pg.inner_text('.brief-bottom'), 'calm line missing')
+    check(count(pg, '.terrain .ridge') == 1 and count(pg, '.terrain .now') <= 1, 'drawing')
+    check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '() => document.fonts.check("600 30px Fraunces")'), 'serif headline font')
+
+@test('Start', 'Today still works as before')
 def _(pg, ctx):
     open_app(pg)
-    tabs = pg.locator('.tab').all_inner_texts()
-    check([t.strip() for t in tabs] == ['Today', 'Calendar', 'Notes', 'Progress'], f'tabs {tabs}')
-    check(pg.locator('.top h1').inner_text() == 'Today', 'title')
-    check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
-    check(count(pg, '#add-today') == 1, 'no add box')
+    check(pg.locator('.top h1').inner_text() == 'Today' and count(pg, '#add-today') == 1, 'today')
     check('Nothing for today' in pg.inner_text('main'), 'empty hint missing')
+
+@test('Home', 'Brief: headline with your name, the day as a line with one dot per event, three acts, what needs you and what is done')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, """async () => { const t = today(), y = addDays(t,-1);
+      await saveSettings({name:'Akash'});
+      await put({type:'event', title:'Standup', date:t, time:'09:30', end:'10:00'});
+      await put({type:'event', title:'Lunch', date:t, time:'13:00', end:'14:30'});
+      await put({type:'event', title:'Supervisor call', date:addDays(t,1), time:'11:00', note:'Bring plots'});
+      await put({type:'task', title:'Old reply', date:addDays(t,-2), done:false, moved:3});
+      await put({type:'task', title:'Chapter 3', date:t, done:false});
+      await put({type:'task', title:'Done thing', date:y, done:true, doneDate:y});
+      const log={}; for (let i=1;i<=4;i++) log[addDays(t,-i)]=true; await put({type:'habit', title:'Walk', log});
+      await put({id:journalId(y), type:'journal', date:y, text:'Good one', mood:4});
+      const d=new Date(); d.setHours(15,0,0,0); LB.now=()=>new Date(d); LB.render(); }""")
+    pg.wait_for_timeout(150)
+    h = pg.inner_text('.headline')
+    check('Akash' in h and 'Two things on the calendar' in h, h)
+    check(count(pg, '.terrain .dot, .terrain .hollow') == 2, 'one dot per timed event')
+    acts = pg.locator('.act').all_inner_texts()
+    check(len(acts) == 3 and 'Standup at 9:30' in acts[0] and 'Lunch at 1:00' in acts[1], acts)
+    check(count(pg, '.act.past') == 1, 'the morning has passed at 3 PM')
+    need = pg.inner_text('.blist.need')
+    for want in ['Old reply', 'Was due', 'moved 3 times', 'Chapter 3', 'Supervisor call', 'Tomorrow at 11', 'Bring plots', 'Walk', '4-day streak']:
+        check(want in need, f'needs attention missing {want}:\n{need}')
+    done = pg.inner_text('.blist.done')
+    check('1 task done yesterday' in done and '“Done thing”' in done and 'Yesterday’s journal' in done and 'kept yesterday' in done, done)
+    check('moved 4' not in pg.inner_text('.brief') and count(pg, '.blist.know') == 0, 'pattern repeated an item already listed')
+    pg.click('.bi-title:has-text("Old reply")'); pg.wait_for_selector('.sheet input[name=title]')
+    check(pg.input_value('.sheet input[name=title]') == 'Old reply', 'title should open the task')
+
+@test('Home', 'A full day reads as a climb; events can have an end time')
+def _(pg, ctx):
+    open_app(pg, 'calendar')
+    pg.click('.agenda [data-action=event-new]'); pg.fill('.sheet input[name=title]', 'Workshop'); pg.fill('.sheet input[name=time]', '09:00'); pg.fill('.sheet input[name=end]', '12:30')
+    pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    check(recs(pg, 'event')[0]['end'] == '12:30', 'end time not saved')
+    ev(pg, "async () => { for (const [a,b] of [['13:00','14:00'],['14:30','15:30'],['16:00','17:00']]) await put({type:'event', title:'M'+a, date:today(), time:a, end:b}); }")
+    go(pg, 'home')
+    check('steady climb until 5:00 PM' in pg.inner_text('.headline'), pg.inner_text('.headline'))
 
 @test('Tasks', 'Add, tick, undo and see done tasks fold away')
 def _(pg, ctx):
@@ -396,7 +444,7 @@ def _(pg, ctx):
     pg.set_viewport_size({'width': 360, 'height': 740})
     open_app(pg)
     ev(pg, "async () => { await put({type:'task', title:'A very long task title that goes on and on and on to test wrapping across the line', date: today(), done:false}); await put({type:'habit', title:'Meditate for ten minutes', log:{}}); await put({type:'goal', title:'Run a long distance goal', target: 100, unit:'kilometres', log:{}}); }")
-    for v in ['today', 'calendar', 'notes', 'notes-journal', 'progress', 'settings']:
+    for v in ['home', 'today', 'calendar', 'notes', 'notes-journal', 'progress', 'settings']:
         n, s = (v.split('-') + [''])[:2]
         go(pg, n, s)
         w = ev(pg, '() => document.documentElement.scrollWidth')
@@ -421,7 +469,7 @@ def _(pg, ctx):
     open_app(pg)
     add_task(pg, '<img src=x onerror="window.__x=1">')
     ev(pg, """() => put({type:'note', title:'<b>t</b>', body:'<script>window.__y=1</script>'})""")
-    for v in ['today', 'calendar', 'notes', 'progress']: go(pg, v)
+    for v in ['home', 'today', 'calendar', 'notes', 'progress']: go(pg, v)
     check(not ev(pg, '() => window.__x || window.__y'), 'HTML ran')
 
 # ---------- runner ----------

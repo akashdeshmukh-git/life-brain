@@ -21,22 +21,23 @@ try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () =
 
 /* ---- Screens ---- */
 const TABS = [
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'today', label: 'Today', icon: 'today' },
   { id: 'calendar', label: 'Calendar', icon: 'calendar' },
   { id: 'notes', label: 'Notes', icon: 'notes' },
   { id: 'progress', label: 'Progress', icon: 'progress' },
 ];
 const VIEWS = {};
-const route = { name: 'today', sub: '' };
+const route = { name: 'home', sub: '' };
 LB.route = route;
 function parseHash() {
   let h = '';
   try { h = decodeURIComponent((location.hash || '').slice(1)); } catch (_) {}
   const i = h.indexOf('-'), name = i < 0 ? h : h.slice(0, i), sub = i < 0 ? '' : h.slice(i + 1);
-  return VIEWS[name] ? { name, sub } : { name: 'today', sub: '' };
+  return VIEWS[name] ? { name, sub } : { name: 'home', sub: '' };
 }
 function go(name, sub = '') {
-  route.name = VIEWS[name] ? name : 'today';
+  route.name = VIEWS[name] ? name : 'home';
   route.sub = sub;
   const h = '#' + route.name + (sub ? '-' + sub : '');
   try { if (location.hash !== h) history.replaceState(null, '', h); } catch (_) {}
