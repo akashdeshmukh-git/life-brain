@@ -5,7 +5,7 @@ VIEWS.progress = () => {
   const stat = (n, l) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`;
   const grid28 = (h) => [...Array(28)].map((_, i) => { const d = addDays(t, i - 27); return `<i class="${habitDone(h, d) ? 'on' : ''}${d === t ? ' now' : ''}" title="${esc(fmtDate(d))}"></i>`; }).join('');
   return header('Progress', 'Last 7 days')
-    + `<section class="card"><div class="stats">${stat(w.tasks, 'tasks done')}${stat(w.habitRate == null ? '–' : Math.round(w.habitRate * 100) + '%', 'habits kept')}${stat(`${w.journalDays}/7`, 'journal days')}${stat(w.mood == null ? '–' : moodFace(Math.round(w.mood)), 'mood')}</div>
+    + `<section class="card"><div class="stats">${stat(w.tasks, 'tasks done')}${stat(w.habitRate == null ? '–' : Math.round(w.habitRate * 100) + '%', 'habits kept')}${stat(w.overdue, 'overdue now')}</div>
       <div class="bars" aria-label="Tasks done each day">${w.perDay.map((x) => `<div class="bar"><small>${x.n || ''}</small><i style="height:${Math.round((x.n / max) * 72)}px" class="${x.n ? '' : 'zero'}"></i><span>${esc(parseYmd(x.d).toLocaleDateString(undefined, { weekday: 'narrow' }))}</span></div>`).join('')}</div></section>`
     + `<section class="card">${sectionH('What you might be missing')}
       ${pats.length ? `<ul class="pats">${pats.map((p) => `<li>${esc(p.text)}</li>`).join('')}</ul>` : '<p class="empty-line">Patterns show up here after a week or two of use.</p>'}

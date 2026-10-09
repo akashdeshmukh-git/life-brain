@@ -123,7 +123,6 @@ def _(pg, ctx):
       await put({type:'task', title:'Chapter 3', date:t, done:false});
       await put({type:'task', title:'Done thing', date:y, done:true, doneDate:y});
       const log={}; for (let i=1;i<=4;i++) log[addDays(t,-i)]=true; await put({type:'habit', title:'Walk', log});
-      await put({id:journalId(y), type:'journal', date:y, text:'Good one', mood:4});
       const d=new Date(); d.setHours(15,0,0,0); LB.now=()=>new Date(d); LB.render(); }""")
     pg.wait_for_timeout(150)
     h = pg.inner_text('.headline')
@@ -136,7 +135,7 @@ def _(pg, ctx):
     for want in ['Old reply', 'Was due', 'moved 3 times', 'Chapter 3', 'Supervisor call', 'Tomorrow at 11', 'Bring plots', 'Walk', 'Done 4 of the last 7 days']:
         check(want in need, f'needs attention missing {want}:\n{need}')
     done = pg.inner_text('.blist.done')
-    check('1 task done yesterday' in done and '“Done thing”' in done and 'Yesterday’s journal' in done and 'kept yesterday' in done, done)
+    check('1 task done yesterday' in done and '“Done thing”' in done and 'kept yesterday' in done, done)
     check('moved 4' not in pg.inner_text('.brief') and count(pg, '.blist.know') == 0, 'pattern repeated an item already listed')
     pg.click('.bi-title:has-text("Old reply")'); pg.wait_for_selector('.sheet input[name=title]')
     check(pg.input_value('.sheet input[name=title]') == 'Old reply', 'title should open the task')
@@ -210,22 +209,21 @@ def _(pg, ctx):
     pg.click('.hrow'); pg.fill('.sheet input[name=title]', 'Walk 20 min'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'habit')[0]['title'] == 'Walk 20 min', 'rename failed')
 
-@test('Journal', 'Mood and text save as you type and survive a reload')
+@test('Notes', 'No journal any more: old journal entries become dated notes, shown on their day in Calendar')
 def _(pg, ctx):
     open_app(pg)
-    t = T(pg)
-    pg.click('.mood[data-v="4"]'); pg.wait_for_timeout(100)
-    pg.type(f'#journal-{t}', 'Calm day.'); pg.wait_for_timeout(200)
-    check(ev(pg, '() => document.activeElement.id') == f'journal-{t}', 'lost focus while typing')
+    check(count(pg, '.journal, .mood') == 0, 'journal box still on Today')
+    ev(pg, """async () => { await persist('records', st => { st.put({id:'journal-2026-10-05', type:'journal', date:'2026-10-05', text:'Fit converged. Why: fixed the prior.', mood:4}); st.put({id:'journal-2026-10-06', type:'journal', date:'2026-10-06', text:'', mood:3}); }); }""")
     reload(pg)
-    check(pg.eval_on_selector(f'#journal-{t}', 'e => e.value') == 'Calm day.', 'text lost')
-    check(pg.get_attribute('.mood[data-v="4"]', 'aria-checked') == 'true', 'mood lost')
-    go(pg, 'notes', 'journal')
-    check('Calm day.' in pg.inner_text('.jlist') and '🙂' in pg.inner_text('.jlist'), 'journal list')
-    pg.click('.jentry'); pg.wait_for_selector('#journal-sheet')
-    pg.fill('#journal-sheet', 'Calm day. Long walk.'); pg.wait_for_timeout(100)
-    pg.click('.sheet .btn.primary'); sheet_closed(pg)
-    check('Long walk' in pg.inner_text('.jlist'), 'edit in sheet not shown after close')
+    n = recs(pg, 'note')
+    check(len(n) == 1 and n[0]['title'] == 'Journal · Oct 5, 2026' and n[0]['body'].startswith('🙂 Fit converged'), n)
+    check(ev(pg, "() => new Promise(r => { const q = indexedDB.open('lifebrain2'); q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').get('journal-2026-10-05'); g.onsuccess = () => r(g.result.type); }; })") == 'note', 'conversion not stored')
+    go(pg, 'calendar', '2026-10-05')
+    check('Journal · Oct 5' in pg.inner_text('.agenda') and count(pg, '.day[data-date="2026-10-05"] .dot.jr') == 1, 'note not on its day')
+    go(pg, 'notes')
+    check(count(pg, '.seg') == 0 and 'Journal · Oct 5, 2026' in pg.inner_text('.notes'), 'notes list')
+    pg.click('.note'); pg.wait_for_selector('#note-title')
+    check('Written Monday, October 5, 2026' in pg.inner_text('.sheet'), pg.inner_text('.sheet')[:200])
 
 @test('Calendar', 'Month grid, pick a day, add a task and an event there, dots appear, month arrows work')
 def _(pg, ctx):
@@ -285,30 +283,28 @@ def _(pg, ctx):
     pg.click('[data-action=goal-inc]'); pg.wait_for_timeout(150)
     check('Goal reached' in pg.inner_text('#toast') and count(pg, '.goal.done') == 1, 'goal reached')
 
-@test('Progress', 'Week numbers: tasks done, habits only counted since they were added, journal days, mood')
+@test('Progress', 'Week numbers: tasks done, habits only counted since they were added, overdue now')
 def _(pg, ctx):
     open_app(pg)
     ev(pg, """async () => { const t = today();
       for (const i of [0, 0, -2]) await put({type:'task', title:'x'+i, date:addDays(t,i), done:true, doneDate:addDays(t,i)});
       await put({type:'habit', title:'New one', log:{[t]:true}});
-      await put({id:journalId(t), type:'journal', date:t, text:'ok', mood:5}); }""")
+      await put({type:'task', title:'late', date:addDays(t,-1), done:false}); }""")
     go(pg, 'progress')
     s = pg.locator('.stat b').all_inner_texts()
-    check(s[0] == '3' and s[1] == '100%' and s[2] == '1/7' and s[3] == '😄', f'stats {s}')
+    check(s == ['3', '100%', '1'], f'stats {s}')
 
-@test('Patterns', 'Finds mood-with-habit, a slipped habit, a task moved again and again, and the overdue pile')
+@test('Patterns', 'Finds a slipped habit, a task moved again and again, and the overdue pile')
 def _(pg, ctx):
     open_app(pg)
     ev(pg, """async () => { const t = today(), log = {}, slip = {};
-      for (let i = 1; i <= 12; i++) { const d = addDays(t, -i); const on = i % 2 === 0; if (on) log[d] = true;
-        await put({id: journalId(d), type:'journal', date:d, text:'', mood: on ? 5 : 2}); }
       for (const i of [8, 9, 10, 11, 12]) slip[addDays(t, -i)] = true;
       await put({type:'habit', title:'Run', log}); await put({type:'habit', title:'Stretch', log: slip});
       await put({type:'task', title:'Tax forms', date: t, done:false, moved: 4});
       for (let i = 0; i < 5; i++) await put({type:'task', title:'Late '+i, date:addDays(t,-2), done:false}); }""")
     go(pg, 'progress')
     txt = pg.inner_text('.pats')
-    for want in ['mood is better on days you do “Run”', '“Stretch” slipped', '“Tax forms” has been moved 4 times']:
+    for want in ['“Stretch” slipped', '“Tax forms” has been moved 4 times']:
         check(want in txt, f'missing: {want}\n{txt}')
     p = ev(pg, '() => LB.patterns().map(x => x.id)')
     check(len(p) <= 4, 'too many patterns shown')
@@ -394,7 +390,7 @@ def _(pg, ctx):
     v = ev(pg, '(o) => validateImport(o)', old)
     check(v['ok'], v['errors'])
     titles = sorted((r.get('title') or r.get('text') or '') for r in v['records'])
-    check(titles == sorted(['Real task', '🚶 Walk', 'Lesson', 'Tired but ok', 'Talk', 'My direction']), titles)
+    check(titles == sorted(['Real task', '🚶 Walk', 'Lesson', 'Journal · Oct 8, 2026', 'Talk', 'My direction']), titles)
 
 @test('Data', 'First start brings over data from the earlier Life Brain once, skipping examples, and leaves the old data untouched')
 def _(pg, ctx):
@@ -480,7 +476,7 @@ def _(pg, ctx):
     r = {x['id']: x for x in v['records']}
     check(r['ok1']['date'] == '' and r['ok1']['done'] is True and r['ok1']['moved'] == 0 and 'extra' not in r['ok1'], r['ok1'])
     check(r['ok2']['time'] == '' and r['ok2']['end'] == '', r['ok2'])
-    check(r['journal-2026-10-08']['mood'] == 5, 'mood clamped')
+    check(r['journal-2026-10-08']['type'] == 'note' and r['journal-2026-10-08']['body'] == '😄 hi', 'journal becomes a note, mood clamped')
     check(list(r['ok4']['log'].keys()) == ['2026-10-01'], r['ok4']['log'])
     ev(pg, "(o) => importData(validateImport(o), 'merge')", bad); pg.wait_for_timeout(200)
     for v_ in ['home', 'today', 'calendar', 'progress']: go(pg, v_)
@@ -512,9 +508,9 @@ def _(pg, ctx):
             p2.goto(BASE + '/'); p2.wait_for_selector('html[data-ready="1"]', state='attached')
             ev(p2, """async () => { const t = today(); await put({type:'event', title:'E', date:t, time:'09:00'}); await put({type:'task', title:'Old', date:addDays(t,-2), done:false});
               await put({type:'task', title:'Done', date:t, done:true, doneDate:t}); await put({type:'habit', title:'H', log:{}}); await put({type:'goal', title:'G', target:3, log:{}});
-              await put({type:'note', title:'N', body:'b'}); await put({id:journalId(t), type:'journal', date:t, text:'j', mood:3}); }""")
+              await put({type:'note', title:'N', body:'b'}); }""")
             bad = []
-            for v in ['home', 'today', 'calendar', 'notes', 'notes-journal', 'progress', 'settings']:
+            for v in ['home', 'today', 'calendar', 'notes', 'progress', 'settings']:
                 n, s_ = (v.split('-') + [''])[:2]; ev(p2, f"() => LB.go('{n}', '{s_}')"); p2.wait_for_timeout(120)
                 p2.add_script_tag(content=src)
                 r = ev(p2, "async () => (await axe.run(document, {runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']})).violations.map(v => v.id + ' ×' + v.nodes.length + ' ' + v.nodes[0].target.join(' '))")
@@ -528,7 +524,7 @@ def _(pg, ctx):
     pg.set_viewport_size({'width': 360, 'height': 740})
     open_app(pg)
     ev(pg, "async () => { await put({type:'task', title:'A very long task title that goes on and on and on to test wrapping across the line', date: today(), done:false}); await put({type:'habit', title:'Meditate for ten minutes', log:{}}); await put({type:'goal', title:'Run a long distance goal', target: 100, unit:'kilometres', log:{}}); }")
-    for v in ['home', 'today', 'calendar', 'notes', 'notes-journal', 'progress', 'settings']:
+    for v in ['home', 'today', 'calendar', 'notes', 'progress', 'settings']:
         n, s = (v.split('-') + [''])[:2]
         go(pg, n, s)
         w = ev(pg, '() => document.documentElement.scrollWidth')

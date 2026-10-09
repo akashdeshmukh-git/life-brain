@@ -14,13 +14,13 @@ AI calls were tested against a local mock service. Real AI services: NOT TESTED 
 | Tasks | Edit a task: rename, note, push to tomorrow (counted as moved), delete with undo | PASSED |
 | Tasks | Overdue tasks show their date and move to today in one tap; "Anytime" holds undated tasks | PASSED |
 | Habits | Add a habit, tick it, streak counts and shows in Progress | PASSED |
-| Journal | Mood and text save as you type and survive a reload | PASSED |
+| Notes | No journal any more: old journal entries become dated notes, shown on their day in Calendar | PASSED |
 | Calendar | Month grid, pick a day, add a task and an event there, dots appear, month arrows work | PASSED |
 | Calendar | Today's events show on Today | PASSED |
 | Notes | Write, search, pin and delete notes; an empty new note is not saved | PASSED |
 | Goals | Add a goal, +1, correct the count, reach it | PASSED |
-| Progress | Week numbers: tasks done, habits only counted since they were added, journal days, mood | PASSED |
-| Patterns | Finds mood-with-habit, a slipped habit, a task moved again and again, and the overdue pile | PASSED |
+| Progress | Week numbers: tasks done, habits only counted since they were added, overdue now | PASSED |
+| Patterns | Finds a slipped habit, a task moved again and again, and the overdue pile | PASSED |
 | Patterns | Says nothing when there is too little data | PASSED |
 | AI | Preview shows exactly what is sent; notes are off by default; answer is rendered safely and can be saved | PASSED |
 | AI | Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error | PASSED |
