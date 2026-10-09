@@ -99,9 +99,13 @@ function needsAttention(D, t) {
   if (todays.length > 3) out.push({ title: `${todays.length - 3} more for today`, attrs: act('nav', 'data-to="today"'), text: 'On the <u>Today</u> list.' });
   const tm = addDays(t, 1);
   eventsOn(D, tm).slice(0, 2).forEach((e) => out.push({ title: e.title, attrs: act('event-edit', `data-id="${e.id}"`), text: `Tomorrow${e.time ? ' at ' + esc(fmtTime(e.time)) : ''}${e.note ? `. The note says: ${esc(trunc(e.note.split('\n')[0], 90))}` : ''}.` }));
-  D.habits.filter((h) => !habitDone(h, t) && habitStreak(h, t) >= 2).slice(0, 2).forEach((h) => out.push({ title: h.title, attrs: act('nav', 'data-to="today"'), text: `On a ${habitStreak(h, t)}-day streak, not ticked yet today.` }));
+  // A gentle reminder for habits you usually do: framed as a weekly count, not a streak that can 'break'.
+  D.habits.map((h) => ({ h, n: habitCount(h, addDays(t, -7), addDays(t, -1)) })).filter((x) => !habitDone(x.h, t) && x.n >= 3).slice(0, 2).forEach(({ h, n }) => out.push({ title: h.title, attrs: act('nav', 'data-to="today"'), text: `Not ticked yet today. Done ${n} of the last 7 days.` }));
   D.goals.filter((g) => { const left = Number(g.target) - goalNow(g); return left > 0 && left <= 2; }).slice(0, 1).forEach((g) => out.push({ title: g.title, attrs: act('nav', 'data-to="progress"'), text: `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, ${Number(g.target) - goalNow(g)} to go.` }));
-  return out.slice(0, 7);
+  // Everything lives only on this phone, so a backup file is the one safety net against a cleared browser.
+  const n = S.records.size, last = S.lastExport ? daysBetween(S.lastExport.slice(0, 10), t) : null;
+  if (n >= 15 && (last == null || last >= 30)) out.push({ title: 'Save a backup file', attrs: act('nav', 'data-to="settings"'), text: `Everything lives only on this phone. ${last == null ? 'No backup file has been saved yet' : `The last backup file was saved ${last} days ago`}; one is a tap away in <u>Settings</u>.` });
+  return out.slice(0, 8);
 }
 function alreadySorted(D, t) {
   const out = [], y = addDays(t, -1);

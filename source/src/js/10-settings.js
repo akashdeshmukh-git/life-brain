@@ -10,11 +10,12 @@ VIEWS.settings = (sub) => {
   return `<header class="top"><button class="icon-btn" data-action="nav" data-to="home" aria-label="Back">${icon('left')}</button><div class="top-text"><h1>Settings</h1></div></header>`
     + `<section class="card">${sectionH('You')}<label class="field"><span>Your name, for Home</span><input id="f-name" data-live="name" value="${esc(st.name || '')}" maxlength="40" autocomplete="given-name" placeholder="Optional"></label></section>`
     + `<section class="card">${sectionH('Look')}
-      <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-selected="${st.theme === k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
       <div class="swatches" role="radiogroup" aria-label="Colour">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-action="set-accent" data-v="${k}" aria-checked="${st.accent === k}" aria-label="${a.name}" title="${a.name}" style="--c:${isDark() ? a.dark : a.light}"></button>`).join('')}</div></section>`
     + `<section class="card" id="ai-card">${sectionH('AI')}${aiSection()}</section>`
     + `<section class="card">${sectionH('Your data')}
       <p class="small">Everything stays on this phone. No account, no server. ${offline}</p>
+      <p class="small" id="backup-status">${S.lastExport ? `Last backup file: ${esc(relDate(S.lastExport.slice(0, 10)))}.` : 'No backup file saved yet.'} ${S.persisted === true ? 'The browser has agreed not to clear this data on its own.' : S.persisted === false ? 'The browser may clear this data if the phone runs low on space, so keep a backup file.' : ''}</p>
       <div class="chips"><button class="btn" data-action="export">Export backup</button><label class="btn" for="import-file">Import backup</label><input id="import-file" type="file" accept="application/json,.json" data-import hidden></div>
       <details class="more"><summary>Backups on this phone</summary>
         ${snapCache == null ? '<p class="small muted">Loading…</p>' : snapCache.length ? snapCache.map((s) => `<div class="srow"><span><b>${esc(new Date(s.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}</b><small>${esc(s.reason)} · ${plural(s.count, 'item')}</small></span><button class="btn sm" data-action="snap-restore" data-id="${s.id}">Restore</button></div>`).join('') : '<p class="small muted">One is made each day you open the app.</p>'}
@@ -134,7 +135,7 @@ function saveFile(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
   toast('Backup downloaded');
 }
-A.export = () => saveFile(`life-brain-backup-${today()}.json`, JSON.stringify(exportData(), null, 2));
+A.export = async () => { saveFile(`life-brain-backup-${today()}.json`, JSON.stringify(exportData(), null, 2)); await markExported(); };
 document.addEventListener('change', async (ev) => {
   if (!ev.target.matches('[data-import]')) return;
   const file = ev.target.files && ev.target.files[0];

@@ -1,13 +1,13 @@
 /* ===== UI core: theme, tabs, screens, taps, sheets, toasts ===== */
 /* One colour for ticks, the current tab and buttons. light/dark: the colour on white and on black. */
 const ACCENTS = {
-  clay: { name: 'Clay', light: '#c6613f', dark: '#e07a52' },
-  blue: { name: 'Blue', light: '#1a73e8', dark: '#8ab4f8' },
+  clay: { name: 'Clay', light: '#b5532f', dark: '#e07a52' }, // light values pass 4.5:1 on paper and under white text
+  blue: { name: 'Blue', light: '#1967d2', dark: '#8ab4f8' },
   green: { name: 'Green', light: '#188038', dark: '#81c995' },
   purple: { name: 'Purple', light: '#9334e6', dark: '#c58af9' },
-  red: { name: 'Red', light: '#d93025', dark: '#f28b82' },
-  orange: { name: 'Orange', light: '#c26401', dark: '#fcad70' },
-  yellow: { name: 'Yellow', light: '#a48100', dark: '#fdd663' },
+  red: { name: 'Red', light: '#c5221f', dark: '#f28b82' },
+  orange: { name: 'Orange', light: '#a85600', dark: '#fcad70' },
+  yellow: { name: 'Yellow', light: '#856a00', dark: '#fdd663' },
 };
 LB.ACCENTS = ACCENTS;
 const isDark = () => S.settings.theme === 'dark' || (S.settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);

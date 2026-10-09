@@ -15,6 +15,8 @@ const S = (LB.S = {
   storage: 'pending', // ok | unavailable | error
   lastSnapshot: null,
   migrated: false,
+  lastExport: null, // when a backup file was last saved
+  persisted: null, // true if the browser promised not to clear our data
 });
 let idb = null;
 const listeners = [];
@@ -72,15 +74,39 @@ async function dbInit() {
   try { idb = await openDB(); S.storage = 'ok'; }
   catch (e) { idb = null; S.storage = 'unavailable'; console.warn('IndexedDB unavailable', e); return; }
   try {
-    for (const r of (await idbDo('records', 'readonly', (st) => st.getAll())) || []) S.records.set(r.id, r);
+    for (const r of (await idbDo('records', 'readonly', (st) => st.getAll())) || []) { const c = cleanRecord(r); if (c) S.records.set(c.id, c); }
     for (const m of (await idbDo('meta', 'readonly', (st) => st.getAll())) || []) {
       if (m.key === 'settings') S.settings = mergeSettings(m.value);
       if (m.key === 'aiKeys' && m.value && typeof m.value === 'object') S.aiKeys = { ...m.value };
       if (m.key === 'lastSnapshot') S.lastSnapshot = m.value;
       if (m.key === 'migrated') S.migrated = !!m.value;
+      if (m.key === 'lastExport') S.lastExport = m.value;
     }
   } catch (e) { S.storage = 'error'; console.error(e); }
 }
+
+/* Every record that comes in from outside (a backup file, the old database) is reshaped to exactly the fields
+   each kind uses. Ids, dates and times are checked, so nothing odd can reach the page as markup. */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const str = (v, max = 20000) => (typeof v === 'string' ? v.slice(0, max) : v == null ? '' : String(v).slice(0, max));
+const day = (v) => (isYmd(v) && ymd(parseYmd(v)) === v ? v : ''); // a real calendar day, not 2026-13-40
+const isoOr = (v) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : '');
+const dayLog = (o, num) => { const out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) for (const [k, v] of Object.entries(o)) if (day(k)) { if (num) { const n = Number(v); if (Number.isFinite(n) && n) out[k] = clamp(Math.round(n), -100000, 100000); } else if (v) out[k] = true; } return out; };
+function cleanRecord(r) {
+  if (!r || typeof r !== 'object' || !TYPES.includes(r.type) || typeof r.id !== 'string' || !SAFE_ID.test(r.id)) return null;
+  const b = { id: r.id, type: r.type, createdAt: isoOr(r.createdAt), updatedAt: isoOr(r.updatedAt) };
+  switch (r.type) {
+    case 'task': return { ...b, title: str(r.title, 300) || 'Task', date: day(r.date), done: !!r.done, doneDate: r.done ? day(r.doneDate) : '', note: str(r.note, 4000), moved: clamp(Math.round(Number(r.moved) || 0), 0, 999) };
+    case 'event': { const time = TIME.test(r.time || '') ? r.time : ''; return day(r.date) ? { ...b, title: str(r.title, 300) || 'Event', date: day(r.date), time, end: time && TIME.test(r.end || '') ? r.end : '', note: str(r.note, 4000) } : null; }
+    case 'note': return { ...b, title: str(r.title, 200), body: str(r.body, 100000), pinned: !!r.pinned };
+    case 'journal': return day(r.date) ? { ...b, id: 'journal-' + r.date, date: r.date, text: str(r.text, 100000), mood: clamp(Math.round(Number(r.mood) || 0), 0, 5) } : null;
+    case 'habit': return { ...b, title: str(r.title, 80) || 'Habit', log: dayLog(r.log, false), archived: !!r.archived };
+    case 'goal': return { ...b, title: str(r.title, 120) || 'Goal', target: clamp(Math.round(Number(r.target) || 1), 1, 100000), unit: str(r.unit, 20), log: dayLog(r.log, true) };
+  }
+  return null;
+}
+LB.cleanRecord = cleanRecord;
 
 const all = (type) => [...S.records.values()].filter((r) => r.type === type);
 const get = (id) => (id ? S.records.get(id) || null : null);
@@ -113,7 +139,9 @@ async function setAiKey(provider, key) {
 async function storeAiKeys() {
   if (S.settings.ai.rememberKeys && Object.keys(S.aiKeys).length) await setMeta('aiKeys', S.aiKeys); else await delMeta('aiKeys');
 }
-async function requestPersistence() { try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (_) {} }
+async function requestPersistence() {
+  try { if (navigator.storage && navigator.storage.persist) S.persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch (_) {}
+}
 
 /* ---- The earlier Life Brain: turn its records into the new kinds. Example data is left behind. ---- */
 function fromOld(records, profile) {
@@ -170,7 +198,7 @@ async function migrateOld() {
   const old = await readOldDB();
   let n = 0;
   if (old) {
-    const recs = fromOld(old.records, old.meta.profile).filter((r) => !S.records.has(r.id));
+    const recs = fromOld(old.records, old.meta.profile).map(cleanRecord).filter((r) => r && !S.records.has(r.id));
     for (const r of recs) S.records.set(r.id, r);
     if (recs.length) await mustPersist('records', (st) => recs.forEach((r) => st.put(r)));
     n = recs.length;
@@ -191,6 +219,7 @@ async function migrateOld() {
 }
 
 /* ---- Export / import / snapshots ---- */
+async function markExported() { S.lastExport = new Date().toISOString(); await setMeta('lastExport', S.lastExport); emit(); }
 function exportData() {
   return {
     app: 'life-brain', version: 2, exportedAt: new Date().toISOString(),
@@ -202,10 +231,7 @@ function validateImport(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.app !== 'life-brain' || !Array.isArray(obj.records)) return { ok: false, errors: ['This file is not a Life Brain backup.'] };
   const raw = obj.version === 2 ? obj.records : fromOld(obj.records, obj.profile); // older backups are converted
   const errors = [], records = [];
-  raw.forEach((r, i) => {
-    if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id || !TYPES.includes(r.type)) errors.push(`Item ${i + 1} is damaged.`);
-    else records.push(r);
-  });
+  raw.forEach((r, i) => { const c = cleanRecord(r); if (c) records.push(c); else errors.push(`Item ${i + 1} is damaged.`); });
   if (errors.length > 5) errors.splice(5, errors.length - 5, `…and ${errors.length - 5} more.`);
   const counts = {};
   records.forEach((r) => (counts[r.type] = (counts[r.type] || 0) + 1));

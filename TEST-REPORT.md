@@ -1,8 +1,8 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **28 of 28 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **32 of 32 PASSED**.
 
-AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them).
+AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them). The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
 | Area | Test | Result |
 |---|---|---|
@@ -31,6 +31,10 @@ AI calls were tested against a local mock service. Real AI services: NOT TESTED 
 | Data | Delete everything needs DELETE typed, then clears all | PASSED |
 | Look | Dark is true black; theme and colour switch from Settings and persist | PASSED |
 | Look | Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once | PASSED |
+| Tasks | Quick add reads a date word at the end: one step instead of five, with Undo | PASSED |
+| Data | Imported records are reshaped: bad ids, dates, times and markup are refused or neutralised | PASSED |
+| Data | Backup safety: Settings shows when a backup file was last saved; Home reminds only when one is overdue | PASSED |
+| Accessibility | axe-core finds no WCAG 2.2 A/AA problems on any screen, light or dark | PASSED |
 | Look | Fits a small phone (360px) on every screen with no sideways scrolling; uses Inter | PASSED |
 | Offline | Installs a service worker and opens with no network | PASSED |
 | Safety | Titles with HTML are shown as text, not run | PASSED |
