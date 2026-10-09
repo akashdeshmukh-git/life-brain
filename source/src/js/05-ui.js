@@ -1,106 +1,91 @@
-/* ===== UI core: theming, router, actions, sheets, forms ===== */
-/* Highlight colours: the live row, the current tab, what you've picked. f: the fill; o: text on it;
-   iw/ib: the colour as text on white and on black. Yellow is Day Board's restrained highlight. */
+/* ===== UI core: theme, tabs, screens, taps, sheets, toasts ===== */
+/* One colour for ticks, the current tab and buttons. light/dark: the colour on white and on black. */
 const ACCENTS = {
-  blue: { name: 'Blue', f: '#2850ad', o: '#ffffff', iw: '#2850ad', ib: '#7fa6f0' },
-  red: { name: 'Red', f: '#ee352e', o: '#ffffff', iw: '#c4221b', ib: '#ff7a72' },
-  yellow: { name: 'Yellow', f: '#fccc0a', o: '#111111', iw: '#7a5d00', ib: '#fccc0a' },
-  green: { name: 'Green', f: '#6cbe45', o: '#111111', iw: '#2f6e14', ib: '#8fd16b' },
-  purple: { name: 'Purple', f: '#b933ad', o: '#ffffff', iw: '#9c2492', ib: '#e07ad6' },
-  pink: { name: 'Pink', f: '#f4a9be', o: '#111111', iw: '#a8386a', ib: '#f4a9be' },
-  orange: { name: 'Orange', f: '#ff6319', o: '#111111', iw: '#b23e00', ib: '#ff8a50' },
+  blue: { name: 'Blue', light: '#1a73e8', dark: '#8ab4f8' },
+  green: { name: 'Green', light: '#188038', dark: '#81c995' },
+  purple: { name: 'Purple', light: '#9334e6', dark: '#c58af9' },
+  red: { name: 'Red', light: '#d93025', dark: '#f28b82' },
+  orange: { name: 'Orange', light: '#c26401', dark: '#fcad70' },
+  yellow: { name: 'Yellow', light: '#a48100', dark: '#fdd663' },
 };
 LB.ACCENTS = ACCENTS;
+const isDark = () => S.settings.theme === 'dark' || (S.settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
 function applyTheme() {
-  const root = document.documentElement;
-  const mode = S.settings.mode || (matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white');
-  const a = ACCENTS[S.settings.accent] || ACCENTS.yellow;
-  if (root.dataset.mode && root.dataset.mode !== mode && !reduceMotion()) { // ease light↔dark, no brightness jump
-    root.classList.add('theming');
-    setTimeout(() => root.classList.remove('theming'), 400);
-  }
-  root.dataset.mode = mode;
-  root.style.setProperty('--accent-fill', a.f); root.style.setProperty('--on-accent-fill', a.o);
-  root.style.setProperty('--ink-w', a.iw); root.style.setProperty('--ink-b', a.ib);
+  const root = document.documentElement, dark = isDark(), a = ACCENTS[S.settings.accent] || ACCENTS.blue;
+  root.dataset.theme = dark ? 'dark' : 'light';
+  root.style.setProperty('--accent', dark ? a.dark : a.light);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = '#000000'; // the status bar becomes the top of the black sign
+  if (meta) meta.content = dark ? '#000000' : '#ffffff';
 }
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (_) {}
 
-/* ---- Routing ---- */
-const NAV = [
-  { id: 'home', label: 'Board', icon: 'board', tab: true },
-  { id: 'today', label: 'Tasks', icon: 'tasks', tab: true },
-  { id: 'lines', label: 'Lines', icon: 'lines', tab: true },
-  { id: 'brain', label: 'Brain', icon: 'brain', tab: true },
-  { id: 'month', label: 'Month', icon: 'calendar' },
-  { id: 'memory', label: 'Memory', icon: 'book' },
-  { id: 'life', label: 'Life Model', icon: 'life' },
-  { id: 'experiments', label: 'Experiments', icon: 'flask' },
-  { id: 'review', label: 'Review', icon: 'chart' },
-  { id: 'settings', label: 'Settings', icon: 'gear' },
+/* ---- Screens ---- */
+const TABS = [
+  { id: 'today', label: 'Today', icon: 'today' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+  { id: 'notes', label: 'Notes', icon: 'notes' },
+  { id: 'progress', label: 'Progress', icon: 'progress' },
 ];
 const VIEWS = {};
-const route = { name: 'home', sub: '' };
+const route = { name: 'today', sub: '' };
 LB.route = route;
 function parseHash() {
   let h = '';
   try { h = decodeURIComponent((location.hash || '').slice(1)); } catch (_) {}
-  const [name, ...rest] = h.split('-');
-  return VIEWS[name] ? { name, sub: rest.join('-') } : { name: 'home', sub: '' };
+  const i = h.indexOf('-'), name = i < 0 ? h : h.slice(0, i), sub = i < 0 ? '' : h.slice(i + 1);
+  return VIEWS[name] ? { name, sub } : { name: 'today', sub: '' };
 }
 function go(name, sub = '') {
-  route.name = VIEWS[name] ? name : 'home';
+  route.name = VIEWS[name] ? name : 'today';
   route.sub = sub;
   const h = '#' + route.name + (sub ? '-' + sub : '');
-  try { if (location.hash !== h) history.replaceState(null, '', h); } catch (_) { try { location.hash = h; } catch (__) {} }
+  try { if (location.hash !== h) history.replaceState(null, '', h); } catch (_) {}
   render(true);
 }
 LB.go = go;
 function renderNav() {
-  const cur = route.name;
-  const inMore = !NAV.find((n) => n.id === cur)?.tab;
-  $('#tabbar').innerHTML = NAV.filter((n) => n.tab).map((n) => `<button class="tab" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></button>`).join('')
-    + `<button class="tab" data-action="more" ${inMore ? 'aria-current="page"' : ''}>${icon('more')}<span>More</span></button>`;
-  $('#side').innerHTML = `<div class="brand"><img class="brand-mark" src="${LB.LOGO}" alt="" width="34" height="34">Life Brain</div>`
-    + NAV.map((n, i) => (i === 4 || i === 9 ? '<div class="side-sep"></div>' : '') + `<button class="side-link" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}>${icon(n.icon)}${n.label}</button>`).join('');
+  const cur = route.name === 'settings' ? '' : route.name;
+  $('#tabbar').innerHTML = TABS.map((n) => `<button class="tab" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}><span class="tab-ic">${icon(n.icon)}</span><span>${n.label}</span></button>`).join('');
 }
-let lastRoute = '';
+/* The top of every screen: big title, a small line under it, settings on the right. */
+const header = (title, sub = '', right = '') => `<header class="top"><div class="top-text"><h1>${esc(title)}</h1>${sub ? `<p class="top-sub">${sub}</p>` : ''}</div>
+  <div class="top-right">${right}<button class="icon-btn" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div></header>`;
+let lastKey = '';
 function render(focus) {
   applyTheme();
   renderNav();
-  const view = $('#view');
-  const key = route.name + '/' + route.sub;
-  const scroll = key === lastRoute ? window.scrollY : 0;
-  const warn = S.storage === 'unavailable' ? '<div class="banner" role="alert"><span><b>Not saving.</b> This browser blocks storage, so changes last only until you close the page. Export a backup from Settings → Data.</span></div>'
-    : S.storage === 'error' ? '<div class="banner" role="alert"><span><b>A save failed.</b> Recent changes may not be stored. Export a backup from Settings → Data now.</span></div>' : '';
-  try {
-    view.innerHTML = warn + VIEWS[route.name](route.sub); noNativeValidation(view);
-    const sign = $('.page-head', view); if (sign && view.firstElementChild !== sign) view.prepend(sign); // the station sign always comes first
-  }
-  catch (e) { console.error(e); view.innerHTML = `<div class="empty"><strong>This screen hit an error.</strong> Your data is safe. ${esc(e.message)}</div>`; }
-  if (key !== lastRoute) { view.style.animation = 'none'; void view.offsetWidth; view.style.animation = ''; }
-  lastRoute = key;
-  const tb = $('#topbar');
-  if (tb) tb.textContent = ($('.page-title', view) || {}).textContent || '';
-  window.scrollTo(0, scroll);
-  if (focus) view.focus({ preventScroll: true });
+  const view = $('#view'), key = route.name + '/' + route.sub;
+  const keep = key === lastKey ? window.scrollY : 0;
+  const active = document.activeElement, activeId = active && view.contains(active) && active.id;
+  const caret = activeId && 'selectionStart' in active ? [active.selectionStart, active.selectionEnd] : null;
+  const warn = S.storage === 'unavailable' ? '<div class="banner" role="alert"><b>Not saving.</b> This browser blocks storage, so changes are lost when you close it.</div>'
+    : S.storage === 'error' ? '<div class="banner" role="alert"><b>A save failed.</b> Export a backup from Settings now.</div>' : '';
+  // Half-typed text in a box the screen doesn't own (a key, a title) must survive a redraw.
+  const typed = key === lastKey ? $$('input[id]:not([type=checkbox]):not([type=file]):not([type=radio]), textarea[id]', view).map((el) => [el.id, el.value]) : [];
+  try { view.innerHTML = warn + VIEWS[route.name](route.sub);
+    for (const [id, v] of typed) { const el = $('#' + CSS.escape(id), view); if (el && !el.value && v) { el.value = v; if (el.dataset.live === 'ai-key') el.dispatchEvent(new Event('input', { bubbles: true })); } } $$('form', view).forEach((f) => (f.noValidate = true)); }
+  catch (e) { console.error(e); view.innerHTML = `<div class="empty">This screen hit an error. Your data is safe.<br><small>${esc(e.message)}</small></div>`; }
+  lastKey = key;
+  window.scrollTo(0, keep);
+  const back = activeId && $('#' + CSS.escape(activeId), view);
+  if (back) { back.focus({ preventScroll: true }); if (caret) try { back.setSelectionRange(caret[0], caret[1]); } catch (_) {} } // typing survives a redraw
+  else if (focus) view.focus({ preventScroll: true });
 }
 LB.render = render;
 
-/* ---- Actions & forms (event delegation; every data-action must exist in A) ---- */
+/* ---- Taps and forms: data-action → A, form[data-form] → F ---- */
 const A = (LB.A = {});
 const F = (LB.F = {});
+const settle = (f) => { try { return Promise.resolve(f()); } catch (e) { return Promise.reject(e); } };
+const logIfBug = (e) => { if (!(e instanceof Error) || e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError) console.error(e); };
 document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el || el.disabled) return;
   const fn = A[el.dataset.action];
-  if (!fn) { console.error('Unknown action', el.dataset.action); toast('That control is not wired up yet.', 'bad'); return; }
-  ev.preventDefault();
+  if (!fn) { console.error('Unknown action', el.dataset.action); return; }
+  if (el.tagName !== 'INPUT') ev.preventDefault();
   settle(() => fn(el, ev)).catch((e) => { logIfBug(e); toast(e.message || 'Something went wrong.', 'bad'); });
 });
-/* Run a handler so sync throws and async rejections are handled the same way. */
-const settle = (f) => { try { return Promise.resolve(f()); } catch (e) { return Promise.reject(e); } };
-const logIfBug = (e) => { if (!(e instanceof Error) || e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError) console.error(e); };
 document.addEventListener('submit', (ev) => {
   const form = ev.target.closest('form[data-form]');
   if (!form) return;
@@ -114,15 +99,11 @@ document.addEventListener('submit', (ev) => {
     if (errEl) errEl.textContent = e.message || 'Could not save.'; else toast(e.message || 'Could not save.', 'bad');
   });
 });
-/* Validation is ours, with readable messages in the page, not the browser's bubbles. */
-const noNativeValidation = (root) => $$('form', root).forEach((f) => (f.noValidate = true));
 A.nav = (el) => { closeSheet(); go(el.dataset.to, el.dataset.sub || ''); };
-A.more = () => openSheet({ title: 'More', body: `<div class="list">${NAV.filter((n) => !n.tab).map((n) => `<button class="item" data-action="nav" data-to="${n.id}"><span class="item-emoji">${icon(n.icon)}</span><span class="item-main"><span class="item-title">${n.label}</span></span>${icon('right')}</button>`).join('')}</div>` });
 A['sheet-close'] = () => closeSheet();
 
-/* ---- Toast ---- */
+/* ---- Toast, with an optional Undo ---- */
 let toastTimer;
-/* Toasts confirm completed actions; an optional action (Undo) makes slips forgivable. */
 function toast(msg, tone = '', opts = {}) {
   const t = $('#toast');
   if (!t) return;
@@ -136,20 +117,17 @@ function toast(msg, tone = '', opts = {}) {
     b.addEventListener('click', () => { t.hidden = true; clearTimeout(toastTimer); settle(opts.onAction).catch((e) => toast(e.message, 'bad')); });
     t.append(b);
   }
-  t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), opts.action || tone === 'bad' ? 6000 : 2600);
+  toastTimer = setTimeout(() => (t.hidden = true), opts.action || tone === 'bad' ? 5000 : 2400);
   if (tone === 'bad') haptic('error');
 }
-/* Haptics only for meaningful moments (success, error); silently absent where unsupported. */
-function haptic(kind) { try { if (navigator.vibrate) navigator.vibrate(kind === 'error' ? [12, 60, 12] : 10); } catch (_) {} }
+function haptic(kind) { try { if (navigator.vibrate) navigator.vibrate(kind === 'error' ? [12, 60, 12] : 8); } catch (_) {} }
 LB.toast = toast;
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast('Copied'); }
-  catch (_) { toast('Copy is blocked here. Select the text and copy it manually.', 'bad'); }
+  catch (_) { toast('Copy is blocked here. Select the text and copy it.', 'bad'); }
 }
 
-/* ---- Sheets ---- */
 /* ---- Sheets as physical cards ----
    Springs use Apple's two parameters (damping ratio, response in seconds). Opening from a tap is
    critically damped; releasing a drag hands the finger's velocity to the spring and may bounce a little.
@@ -244,6 +222,7 @@ function closeSheet(velocity = 0) {
     Object.assign(SH, { open: false, closing: false, sheet: null, wrap: null, scrim: null });
     document.body.style.overflow = '';
     if (SH.lastFocus && document.contains(SH.lastFocus)) SH.lastFocus.focus({ preventScroll: true });
+    emit(); // anything saved quietly while the sheet was open now shows on the screen
   };
   if (reduceMotion()) { SH.wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease-in', fill: 'forwards' }).onfinish = finish; return; }
   if (SH.dialog) { SH.eps = 0.002; springTo(SH, 0, { damping: 1, response: 0.25 }, sheetApply, finish); return; }
@@ -294,44 +273,18 @@ document.addEventListener('keydown', (ev) => {
   else if (!ev.shiftKey && document.activeElement === last) { first.focus(); ev.preventDefault(); }
 });
 
-/* Inline validation: say what is wrong next to the field, as soon as it is wrong. */
-function validateField(el) {
-  const field = el.closest('.field');
-  if (!field || !el.willValidate) return true;
-  const label = (($('span', field) || {}).textContent || 'This field').trim();
-  const vs = el.validity;
-  let msg = '';
-  if (vs.valueMissing && el.dataset.touched) msg = `${label} is required.`;
-  else if (vs.badInput) msg = el.type === 'number' ? 'Enter a number.' : 'Enter a valid value.';
-  else if (vs.rangeUnderflow || vs.rangeOverflow) msg = `Use a value from ${el.min} to ${el.max}.`;
-  let note = $('.err-inline', field);
-  if (msg) {
-    if (!note) { note = document.createElement('small'); note.className = 'err-inline'; note.id = (el.id || 'f' + Math.random().toString(36).slice(2)) + '-err'; note.setAttribute('role', 'alert'); field.append(note); }
-    note.textContent = msg;
-    el.setAttribute('aria-invalid', 'true');
-    el.setAttribute('aria-describedby', note.id);
-    return false;
-  }
-  if (note) note.remove();
-  el.removeAttribute('aria-invalid');
-  el.removeAttribute('aria-describedby');
-  return true;
-}
-document.addEventListener('input', (ev) => {
-  const el = ev.target;
-  if (!el.matches || !el.matches('.field input, .field textarea, .field select')) return;
-  el.dataset.touched = '1';
-  if (el.getAttribute('aria-invalid') === 'true' || el.type === 'number') validateField(el);
-});
-document.addEventListener('focusout', (ev) => { const el = ev.target; if (el.matches && el.matches('.field input, .field textarea, .field select')) validateField(el); });
 
-/* Collapse the large title into the translucent bar once it scrolls away. */
-let scrollQueued = false;
-window.addEventListener('scroll', () => {
-  if (scrollQueued) return;
-  scrollQueued = true;
-  requestAnimationFrame(() => { scrollQueued = false; document.documentElement.classList.toggle('scrolled', window.scrollY > 56); });
-}, { passive: true });
+const noNativeValidation = (root) => $$('form', root).forEach((f) => (f.noValidate = true));
+document.addEventListener('keydown', (ev) => {
+  if (!SH.open || !SH.sheet) return;
+  if (ev.key === 'Escape') { closeSheet(); return; }
+  if (ev.key !== 'Tab') return; // keep keyboard focus inside the sheet
+  const f = $$('button, [href], input, select, textarea, summary', SH.sheet).filter((el) => !el.disabled && el.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (ev.shiftKey && (document.activeElement === first || !SH.sheet.contains(document.activeElement))) { last.focus(); ev.preventDefault(); }
+  else if (!ev.shiftKey && document.activeElement === last) { first.focus(); ev.preventDefault(); }
+});
 /* In-page confirmation (native confirm() is unavailable in some hosts). */
 function confirmSheet({ title, text, confirmLabel = 'Confirm', danger = false, requireText = '' }) {
   return new Promise((resolve) => {
@@ -340,7 +293,7 @@ function confirmSheet({ title, text, confirmLabel = 'Confirm', danger = false, r
     openSheet({ title, body: `<form class="form" data-form="confirm"><p>${text}</p>
       ${requireText ? `<label class="field"><span>Type ${esc(requireText)} to confirm</span><input name="confirm" autocomplete="off" autocapitalize="characters"></label>` : ''}
       <p class="err" data-form-error></p>
-      <div class="form-actions"><button type="button" class="btn" data-action="sheet-close">Cancel</button><button class="btn ${danger ? 'danger solid' : 'primary'}">${esc(confirmLabel)}</button></div></form>`,
+      <div class="row-end"><button type="button" class="btn" data-action="sheet-close">Cancel</button><button class="btn ${danger ? 'danger solid' : 'primary'}">${esc(confirmLabel)}</button></div></form>`,
     onMount(root) {
       F.confirm = (form, v) => {
         if (requireText && String(v.confirm || '').trim().toUpperCase() !== requireText) throw new Error(`Type ${requireText} exactly to continue.`);
@@ -351,128 +304,3 @@ function confirmSheet({ title, text, confirmLabel = 'Confirm', danger = false, r
   });
 }
 F.confirm = () => {};
-
-/* ---- Form helpers ---- */
-const fieldHTML = (f, val) => {
-  const [name, label, kind = 'text', o = {}] = f;
-  const id = 'f-' + name;
-  const req = o.req ? 'required' : '';
-  const hint = o.hint ? `<small>${esc(o.hint)}</small>` : '';
-  if (kind === 'area') return `<label class="field" for="${id}"><span>${label}</span><textarea id="${id}" name="${name}" maxlength="${o.max || 4000}" ${req} placeholder="${esc(o.ph || '')}">${esc(val)}</textarea>${hint}</label>`;
-  if (kind === 'select') return `<label class="field" for="${id}"><span>${label}</span><select id="${id}" name="${name}" ${req}>${o.options.map(([v, l]) => `<option value="${esc(v)}" ${String(val ?? o.def ?? '') === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>${hint}</label>`;
-  if (kind.startsWith('ref:')) {
-    const t = kind.slice(4);
-    const opts = all(t).sort((a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || ''));
-    return `<label class="field" for="${id}"><span>${label}</span><select id="${id}" name="${name}"><option value="">None</option>${opts.map((r) => `<option value="${r.id}" ${val === r.id ? 'selected' : ''}>${esc((r.emoji ? r.emoji + ' ' : '') + (r.title || r.name))}</option>`).join('')}</select>${hint}</label>`;
-  }
-  if (kind === 'check') return `<label class="check"><input type="checkbox" id="${id}" name="${name}" ${val ? 'checked' : ''}> ${label}</label>`;
-  const type = { number: 'number', date: 'date', time: 'time' }[kind] || 'text';
-  const extra = type === 'number' ? `inputmode="numeric" min="${o.min ?? 0}" max="${o.maxNum ?? 100000}" step="${o.step || 1}"` : `maxlength="${o.max || 200}"`;
-  return `<label class="field" for="${id}"><span>${label}</span><input id="${id}" type="${type}" name="${name}" value="${esc(val ?? '')}" ${req} ${extra} placeholder="${esc(o.ph || '')}" autocomplete="off">${hint}</label>`;
-};
-
-/* Entity definitions drive generic create/edit sheets. */
-const STATUS = {
-  goal: [['active', 'Active'], ['paused', 'Paused'], ['done', 'Done'], ['dropped', 'Dropped']],
-  project: [['active', 'Active'], ['paused', 'Paused'], ['done', 'Done'], ['dropped', 'Dropped']],
-  experiment: [['planned', 'Planned'], ['running', 'Running'], ['done', 'Done'], ['abandoned', 'Abandoned']],
-};
-const ENT = {
-  area: { label: 'Life area', fields: [['emoji', 'Emoji', 'text', { max: 8, ph: '🌱', hint: 'Use your keyboard’s emoji picker.' }], ['name', 'Name', 'text', { req: 1, ph: 'Health' }], ['note', 'What this area means to you', 'area']] },
-  aim: { label: 'Long-term aim', fields: [['title', 'Aim', 'text', { req: 1, ph: 'Stay strong into my 60s' }], ['areaId', 'Life area', 'ref:area'], ['note', 'Why it matters', 'area']] },
-  goal: { label: 'Goal', fields: [['title', 'Goal', 'text', { req: 1 }], ['aimId', 'Long-term aim', 'ref:aim'], ['areaId', 'Life area', 'ref:area'], ['measure', 'How you’ll know it’s done', 'text'], ['due', 'Target date', 'date'], ['status', 'Status', 'select', { options: STATUS.goal, def: 'active' }], ['why', 'Why this goal', 'area']] },
-  project: { label: 'Project', fields: [['title', 'Project', 'text', { req: 1 }], ['goalId', 'Goal', 'ref:goal'], ['status', 'Status', 'select', { options: STATUS.project, def: 'active' }], ['note', 'Notes', 'area']] },
-  task: { label: 'Task', fields: [['title', 'Task', 'text', { req: 1 }], ['areaId', 'Line', 'ref:area', { hint: 'The part of your life it belongs to. A goal’s line wins if the task has one.' }], ['projectId', 'Project', 'ref:project'], ['goalId', 'Goal (if no project)', 'ref:goal'],
-    ['priority', 'Priority', 'select', { options: [['1', 'High'], ['2', 'Medium'], ['3', 'Low']], def: '2' }], ['estimateMin', 'Estimate (minutes)', 'number', { maxNum: 1440, step: 5 }],
-    ['plannedDate', 'Planned for', 'date'], ['firstStep', 'First step', 'text', { ph: 'Open the doc and write one sentence' }], ['context', 'Context', 'text', { ph: 'At desk, needs laptop' }], ['why', 'Why it matters', 'area']] },
-  habit: { label: 'Habit', fields: [['emoji', 'Emoji', 'text', { max: 8, ph: '🚶' }], ['title', 'Habit', 'text', { req: 1 }], ['areaId', 'Life area', 'ref:area'], ['perWeek', 'Target days per week', 'number', { min: 1, maxNum: 7 }]] },
-  event: { label: 'Event', fields: [['title', 'Event', 'text', { req: 1 }], ['date', 'Date', 'date', { req: 1 }], ['allDay', 'All day', 'check'], ['start', 'Starts', 'time'], ['end', 'Ends', 'time'], ['location', 'Location', 'text'], ['notes', 'Notes', 'area']] },
-  experiment: { label: 'Experiment', fields: [['title', 'Name', 'text', { req: 1 }], ['hypothesis', 'Hypothesis', 'area', { req: 1, ph: 'If I…, then…' }], ['intervention', 'Intervention (what you’ll do)', 'area'], ['measurement', 'Measurement (what you’ll record)', 'text'], ['startDate', 'Start', 'date'], ['endDate', 'End', 'date'], ['status', 'Status', 'select', { options: STATUS.experiment, def: 'planned' }]] },
-  memory: { label: 'Memory', fields: [['kind', 'Kind', 'select', { options: Object.entries(MEM_KINDS), def: 'lesson' }], ['title', 'Title', 'text', { req: 1 }], ['body', 'Details', 'area'], ['why', 'Why (for decisions)', 'area'], ['date', 'Date', 'date']] },
-};
-LB.ENT = ENT;
-function fieldsLayout(fields, rec) {
-  const out = [];
-  for (let i = 0; i < fields.length; i++) {
-    const f = fields[i], n = fields[i + 1];
-    const small = (x) => x && ['number', 'date', 'time', 'select'].includes(x[2]) || (x && x[2] && x[2].startsWith('ref:'));
-    if (small(f) && small(n)) { out.push(`<div class="form-row">${fieldHTML(f, rec[f[0]])}${fieldHTML(n, rec[n[0]])}</div>`); i++; }
-    else out.push(fieldHTML(f, rec[f[0]]));
-  }
-  return out.join('');
-}
-function editSheet(type, id, defaults = {}) {
-  const def = ENT[type];
-  const rec = id ? get(id) : { ...defaults };
-  if (id && !rec) { toast('That item no longer exists.', 'bad'); return; }
-  openSheet({ title: (id ? 'Edit ' : 'New ') + def.label.toLowerCase(), body: `<form class="form" data-form="entity" data-type="${type}" data-id="${id || ''}" novalidate>
-    ${fieldsLayout(def.fields, rec)}
-    <p class="err" data-form-error></p>
-    <div class="form-actions">${id ? `<button type="button" class="btn danger" data-action="delete" data-id="${id}">Delete</button><span class="spacer"></span>` : ''}<button type="button" class="btn" data-action="sheet-close">Cancel</button><button class="btn primary">${id ? 'Save' : 'Add'}</button></div></form>`,
-  });
-}
-LB.editSheet = editSheet;
-function readEntity(type, v, form) {
-  const out = {};
-  for (const [name, label, kind = 'text', o = {}] of ENT[type].fields) {
-    let x = v[name];
-    if (kind === 'check') x = !!form.elements[name]?.checked;
-    else if (kind === 'number') x = x === '' || x == null ? null : Number(x);
-    else x = String(x ?? '').trim();
-    if (o.req && (x === '' || x == null)) throw new Error(`${label} is required.`);
-    if (kind === 'number' && x != null && (!Number.isFinite(x) || x < (o.min ?? 0) || x > (o.maxNum ?? 100000))) throw new Error(`${label} must be between ${o.min ?? 0} and ${o.maxNum ?? 100000}.`);
-    if (kind === 'date' && x && !isYmd(x)) throw new Error(`${label} must be a valid date.`);
-    if (kind === 'time' && x && toMin(x) == null) throw new Error(`${label} must be a valid time.`);
-    out[name] = x;
-  }
-  return out;
-}
-F.entity = async (form, v) => {
-  const type = form.dataset.type, id = form.dataset.id;
-  const vals = readEntity(type, v, form);
-  if (type === 'event') {
-    if (!vals.allDay && vals.start && vals.end && toMin(vals.end) <= toMin(vals.start)) throw new Error('The event must end after it starts.');
-    if (vals.allDay) { vals.start = ''; vals.end = ''; }
-  }
-  if (type === 'experiment' && vals.startDate && vals.endDate && vals.endDate < vals.startDate) throw new Error('The end date must be after the start date.');
-  const old = id ? get(id) : null;
-  let rec = { ...(old || { type }), ...vals, type };
-  if (type === 'task') rec = applyTaskPlan(old, rec);
-  if (type === 'task' && !old) rec.status = 'open';
-  if (type === 'habit' && !old) rec.log = {};
-  if (type === 'experiment' && !old) rec.observations = [];
-  if (type === 'task' && rec.projectId && rec.goalId) { const p = get(rec.projectId); if (p && p.goalId === rec.goalId) rec.goalId = ''; }
-  await put(rec);
-  if (S.storage === 'ok') requestPersistence();
-  closeSheet();
-  toast(old ? 'Saved' : `${ENT[type].label} added`);
-};
-/* Plan history: every date a task is planned for is kept; moving it later counts as a deferral. */
-function applyTaskPlan(old, rec) {
-  const plans = [...((old && old.plans) || [])];
-  const prev = old ? old.plannedDate : '';
-  if (rec.plannedDate && rec.plannedDate !== prev) {
-    if (!plans.includes(rec.plannedDate)) plans.push(rec.plannedDate);
-    if (prev && rec.plannedDate > prev && (!old || old.status === 'open')) rec.deferrals = (old.deferrals || 0) + 1;
-  }
-  rec.plans = plans;
-  rec.deferrals = rec.deferrals || (old && old.deferrals) || 0;
-  return rec;
-}
-LB.applyTaskPlan = applyTaskPlan;
-A.add = (el) => editSheet(el.dataset.type, null, { ...el.dataset.date ? { date: el.dataset.date, plannedDate: el.dataset.date } : {}, ...(el.dataset.preset ? JSON.parse(el.dataset.preset) : {}) });
-A.edit = (el) => editSheet(get(el.dataset.id)?.type, el.dataset.id);
-/* Deleting is immediate and forgiving: Undo brings back the item and every link to it. */
-A.delete = async (el) => {
-  const r = get(el.dataset.id);
-  if (!r) return;
-  const links = [];
-  for (const x of S.records.values()) for (const k of ['areaId', 'aimId', 'goalId', 'projectId']) if (x[k] === r.id) links.push([x.id, k]);
-  closeSheet();
-  await del(r.id);
-  toast(`Deleted “${trunc(r.title || r.name, 36)}”`, '', { action: 'Undo', onAction: async () => {
-    await put(r);
-    for (const [id, k] of links) { const x = get(id); if (x) await put({ ...x, [k]: r.id }); }
-    toast('Restored');
-  } });
-};

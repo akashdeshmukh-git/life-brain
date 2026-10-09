@@ -1,7 +1,7 @@
 {
   "name": "Life Brain",
   "short_name": "Life Brain",
-  "description": "Plan your day to what you really get done, record what actually happened, and learn from the gap. Kept on your device.",
+  "description": "Tasks, calendar, notes, journal, habits and goals in one simple app. Kept on your phone.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
