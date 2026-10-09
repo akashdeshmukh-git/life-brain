@@ -21,10 +21,10 @@ VIEWS.today = () => {
   const anytime = D.tasks.filter((x) => !x.done && !x.date).sort(byCreated);
   const done = doneOn(D, t).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   const overdue = open.filter((x) => x.date < t).length;
-  return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })))
+  return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })), `<button class="pill ai-pill" data-action="plan-week">${icon('spark')}Plan week</button>`)
     + (events.length ? `<section class="card">${events.map(eventRow).join('')}</section>` : '')
     + `<section class="card tasks">${addTaskForm(t, 'add-today', 'Add a task (try “… tomorrow”)', true)}
-      ${overdue ? `<div class="mini-h"><span>${plural(overdue, 'overdue task')}</span><button class="link" data-action="overdue-today">Move to today</button></div>` : ''}
+      ${overdue ? `<div class="mini-h"><span>${plural(overdue, 'overdue task')}</span><span class="mini-btns"><button class="link" data-action="overdue-sort">${icon('spark')}Sort out</button><button class="link" data-action="overdue-today">Move to today</button></span></div>` : ''}
       ${(ui.allOpen ? open : open.slice(0, 40)).map((x) => taskRow(x, t)).join('')}
       ${open.length > 40 && !ui.allOpen ? `<button class="fold" data-action="fold" data-k="allOpen" aria-expanded="false">${icon('down')}Show ${open.length - 40} more</button>` : ''}
       ${!open.length && !anytime.length && !done.length ? '<p class="empty-line">Nothing for today. Type above to add a task.</p>' : ''}
@@ -89,7 +89,7 @@ function taskSheet(x, date = '') {
     <div class="chips"><button type="button" class="chip" data-action="set-date" data-v="${t}">Today</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 1)}">Tomorrow</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 7)}">Next week</button><button type="button" class="chip" data-action="set-date" data-v="">No date</button></div>
     <label class="field"><span>Note</span><textarea name="note" rows="3" maxlength="4000">${esc(r.note || '')}</textarea></label>
     <p class="err" data-form-error></p>
-    <div class="row-end">${x ? `<button type="button" class="btn danger" data-action="delete" data-id="${x.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
+    <div class="row-end">${x ? `<button type="button" class="btn danger" data-action="delete" data-id="${x.id}">Delete</button>${x.done ? '' : `<button type="button" class="btn" data-action="task-break" data-id="${x.id}">${icon('spark')}Break down</button>`}<span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
 }
 A['set-date'] = (el) => { const f = $('#task-date'); if (f) f.value = el.dataset.v; };
 F.task = async (form, v) => {
