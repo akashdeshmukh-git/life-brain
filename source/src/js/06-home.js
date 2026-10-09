@@ -98,6 +98,10 @@ function needsAttention(D, t) {
   todays.slice(0, 3).forEach((x) => out.push({ title: x.title, attrs: act('task-edit', `data-id="${x.id}"`), text: `On today’s list${x.note ? `. ${esc(trunc(x.note.split('\n')[0], 80))}` : ''}.`.replace('..', '.') }));
   if (todays.length > 3) out.push({ title: `${todays.length - 3} more for today`, attrs: act('nav', 'data-to="today"'), text: 'On the <u>Today</u> list.' });
   const tm = addDays(t, 1);
+  const written = (n) => (n.createdAt && !Number.isNaN(Date.parse(n.createdAt)) ? ymd(new Date(n.createdAt)) : '');
+  const noteText = (n) => esc(trunc(String(n.body || '').replace(/\s+/g, ' '), 100));
+  D.notes.filter((n) => noteDay(n) === t && written(n) < t).slice(0, 2).forEach((n) => out.push({ title: n.title || trunc(String(n.body || '').split('\n')[0], 60) || 'Note', attrs: act('note-open', `data-id="${n.id}"`), text: `A note you left for today${n.title && n.body ? `: ${noteText(n)}` : '.'}` }));
+  D.notes.filter((n) => noteDay(n) === tm).slice(0, 2).forEach((n) => out.push({ title: n.title || trunc(String(n.body || '').split('\n')[0], 60) || 'Note', attrs: act('note-open', `data-id="${n.id}"`), text: `A note for tomorrow${n.title && n.body ? `: ${noteText(n)}` : '.'}` }));
   eventsOn(D, tm).slice(0, 2).forEach((e) => out.push({ title: e.title, attrs: act('event-edit', `data-id="${e.id}"`), text: `Tomorrow${e.time ? ' at ' + esc(fmtTime(e.time)) : ''}${e.note ? `. The note says: ${esc(trunc(e.note.split('\n')[0], 90))}` : ''}.` }));
   // A gentle reminder for habits you usually do: framed as a weekly count, not a streak that can 'break'.
   D.habits.map((h) => ({ h, n: habitCount(h, addDays(t, -7), addDays(t, -1)) })).filter((x) => !habitDone(x.h, t) && x.n >= 3).slice(0, 2).forEach(({ h, n }) => out.push({ title: h.title, attrs: act('nav', 'data-to="today"'), text: `Not ticked yet today. Done ${n} of the last 7 days.` }));

@@ -15,7 +15,9 @@ const doneOn = (D, date) => D.tasks.filter((x) => x.done && x.doneDate === date)
 const eventsOn = (D, date) => D.events.filter((e) => e.date === date).sort((a, b) => (a.time || '').localeCompare(b.time || '') || byTitle(a, b));
 
 /* Notes written on a given day (by when they were first saved) */
-const notesOn = (D, date) => D.notes.filter((n) => String(n.createdAt || '').slice(0, 10) === date || (n.id === 'journal-' + date));
+/* A note belongs to the day you pick for it; older notes fall back to the (local) day they were written. */
+const noteDay = (n) => (isYmd(n.date) ? n.date : n.createdAt && !Number.isNaN(Date.parse(n.createdAt)) ? ymd(new Date(n.createdAt)) : '');
+const notesOn = (D, date) => D.notes.filter((n) => noteDay(n) === date);
 
 /* Habits */
 const habitDone = (h, date) => !!(h.log && h.log[date]);

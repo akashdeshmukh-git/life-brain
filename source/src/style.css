@@ -141,6 +141,10 @@ main { padding: 0 16px calc(96px + var(--safe-b)); outline: none; }
 .note span { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
 .fab { position: fixed; right: max(16px, calc(50vw - 304px)); bottom: calc(84px + var(--safe-b)); z-index: 15; width: 56px; height: 56px; border-radius: 12px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: 0 3px 10px rgba(46, 44, 39, .22); }
 .fab svg { width: 26px; height: 26px; stroke-width: 2.2; }
+.note-when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+.note-day { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.note-day input { height: 34px; width: 9.2em; border: 1px solid var(--line); border-radius: var(--r); padding: 0 6px; background: var(--bg); font-size: 14px; }
+.note-when .chip { padding: 0 10px; }
 .note-title { width: 100%; border: 0; background: none; outline: none; font-family: var(--serif); font-size: 22px; font-weight: 600; padding: 4px 0 8px; }
 .note-body { width: 100%; border: 0; background: none; outline: none; min-height: 45vh; resize: none; line-height: 1.55; padding: 0; }
 .jlist { margin-top: 12px; }

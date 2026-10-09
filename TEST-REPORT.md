@@ -1,6 +1,6 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **32 of 32 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **33 of 33 PASSED**.
 
 AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them). The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
@@ -15,6 +15,7 @@ AI calls were tested against a local mock service. Real AI services: NOT TESTED 
 | Tasks | Overdue tasks show their date and move to today in one tap; "Anytime" holds undated tasks | PASSED |
 | Habits | Add a habit, tick it, streak counts and shows in Progress | PASSED |
 | Notes | No journal any more: old journal entries become dated notes, shown on their day in Calendar | PASSED |
+| Notes | A note can be for another day: pick Tomorrow, it shows on that day, and Home brings it up | PASSED |
 | Calendar | Month grid, pick a day, add a task and an event there, dots appear, month arrows work | PASSED |
 | Calendar | Today's events show on Today | PASSED |
 | Notes | Write, search, pin and delete notes; an empty new note is not saved | PASSED |
