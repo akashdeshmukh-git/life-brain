@@ -9,7 +9,7 @@ function taskRow(x, t = today(), { showDate = true } = {}) {
     <button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>
     <button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</button></div>`;
 }
-const addTaskForm = (date, id, ph = 'Add a task') => `<form class="add-row" data-form="task-add" data-date="${date}"><span class="add-ic">${icon('plus')}</span>
+const addTaskForm = (date, id, ph = 'Add a task', parse = false) => `<form class="add-row" data-form="task-add" data-date="${date}"${parse ? ' data-parse="1"' : ''}><span class="add-ic">${icon('plus')}</span>
   <input id="${id}" name="title" placeholder="${esc(ph)}" maxlength="300" autocomplete="off" enterkeyhint="done" aria-label="${esc(ph)}"></form>`;
 const eventRow = (e) => `<button class="event" data-action="event-edit" data-id="${e.id}"><span class="event-time">${e.time ? esc(fmtTime(e.time)) : 'All day'}</span><span class="event-title">${esc(e.title)}</span></button>`;
 const sectionH = (title, right = '') => `<div class="sec-h"><h2>${title}</h2>${right}</div>`;
@@ -24,16 +24,17 @@ VIEWS.today = () => {
   const j = journalOn(t) || {};
   return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })))
     + (events.length ? `<section class="card">${events.map(eventRow).join('')}</section>` : '')
-    + `<section class="card tasks">${addTaskForm(t, 'add-today')}
+    + `<section class="card tasks">${addTaskForm(t, 'add-today', 'Add a task (try “… tomorrow”)', true)}
       ${overdue ? `<div class="mini-h"><span>${plural(overdue, 'overdue task')}</span><button class="link" data-action="overdue-today">Move to today</button></div>` : ''}
-      ${open.map((x) => taskRow(x, t)).join('')}
+      ${(ui.allOpen ? open : open.slice(0, 40)).map((x) => taskRow(x, t)).join('')}
+      ${open.length > 40 && !ui.allOpen ? `<button class="fold" data-action="fold" data-k="allOpen" aria-expanded="false">${icon('down')}Show ${open.length - 40} more</button>` : ''}
       ${!open.length && !anytime.length && !done.length ? '<p class="empty-line">Nothing for today. Type above to add a task.</p>' : ''}
       ${anytime.length ? `<button class="fold" data-action="fold" data-k="anytime" aria-expanded="${ui.anytime}">${icon('down')}Anytime <span class="count">${anytime.length}</span></button>${ui.anytime ? anytime.map((x) => taskRow(x, t)).join('') : ''}` : ''}
       ${done.length ? `<button class="fold" data-action="fold" data-k="done" aria-expanded="${ui.done}">${icon('down')}Done <span class="count">${done.length}</span></button>${ui.done ? done.map((x) => taskRow(x, t)).join('') : ''}` : ''}
     </section>`
-    + `<section class="card">${sectionH('Habits', D.habits.length ? '<button class="link" data-action="nav" data-to="progress">Streaks</button>' : '')}
-      <div class="habits">${D.habits.sort(byCreated).map((h) => { const on = habitDone(h, t), s = habitStreak(h, t); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${t}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}${s > 1 ? `<span class="streak">${s}</span>` : ''}</button>`; }).join('')}
-        <button class="habit add" data-action="habit-new">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`
+    + `<section class="card">${sectionH('Habits', D.habits.length ? '<button class="link" data-action="nav" data-to="progress">History</button>' : '')}
+      <div class="habits">${D.habits.sort(byCreated).map((h) => { const on = habitDone(h, t); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${t}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}</button>`; }).join('')}
+        <button class="habit add" data-action="habit-new" aria-label="Add a habit">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`
     + `<section class="card">${sectionH('Journal')}${moodRow(t, j.mood)}
       <textarea class="journal" id="journal-${t}" data-journal="${t}" rows="3" placeholder="How was today?" aria-label="Journal for today">${esc(j.text || '')}</textarea></section>`;
 };
@@ -42,13 +43,32 @@ const moodRow = (date, mood) => `<div class="moods" role="radiogroup" aria-label
 A.fold = (el) => { ui[el.dataset.k] = !ui[el.dataset.k]; render(); };
 
 /* ---- Tasks ---- */
+/* Quick add understands a date word at the end, so "Call mom tomorrow" needs one step, not five. */
+const WEEKDAYS = { sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, saturday: 6 }; // not "sun" or "sat": too often ordinary words
+function parseWhen(text, t = today()) {
+  const m = text.match(/^(.*?\S)\s+(?:(?:on|by)\s+)?(today|tonight|tomorrow|tmrw|tmr|next week|anytime|someday|[a-z]+)$/i);
+  if (!m) return null;
+  const w = m[2].toLowerCase();
+  let date;
+  if (w === 'today' || w === 'tonight') date = t;
+  else if (['tomorrow', 'tmrw', 'tmr'].includes(w)) date = addDays(t, 1);
+  else if (w === 'next week') date = addDays(t, 7);
+  else if (w === 'anytime' || w === 'someday') date = '';
+  else if (w in WEEKDAYS) { const d = (WEEKDAYS[w] - parseYmd(t).getDay() + 7) % 7 || 7; date = addDays(t, d); }
+  else return null;
+  return { title: m[1].trim(), date };
+}
+LB.parseWhen = parseWhen;
 F['task-add'] = async (form, v) => {
-  const title = String(v.title || '').trim();
+  let title = String(v.title || '').trim(), date = form.dataset.date || '';
   if (!title) return;
   const inp = $('input', form);
   if (inp) inp.value = '';
-  await put({ type: 'task', title, date: form.dataset.date || '', done: false, doneDate: '', note: '', moved: 0 });
+  const when = form.dataset.parse ? parseWhen(title) : null;
+  if (when) ({ title, date } = when);
+  const r = await put({ type: 'task', title, date, done: false, doneDate: '', note: '', moved: 0 });
   haptic();
+  if (when && date !== today()) toast(date ? `Added for ${relDate(date)}` : 'Added to Anytime', '', { action: 'Undo', onAction: () => del(r.id) });
 };
 A['task-toggle'] = async (el) => {
   const x = get(el.dataset.id);

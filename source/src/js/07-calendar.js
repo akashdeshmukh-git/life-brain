@@ -19,7 +19,8 @@ VIEWS.calendar = () => {
   const right = `${sel.slice(0, 7) !== t.slice(0, 7) ? `<button class="pill" data-action="nav" data-to="calendar" data-sub="${t}">Today</button>` : ''}
     <button class="icon-btn" data-action="nav" data-to="calendar" data-sub="${shift(-1)}" aria-label="Previous month">${icon('left')}</button><button class="icon-btn" data-action="nav" data-to="calendar" data-sub="${shift(1)}" aria-label="Next month">${icon('right')}</button>`;
   return header(m0.toLocaleDateString(undefined, { month: 'long' }), String(y), right)
-    + `<section class="card cal"><div class="grid dows" aria-hidden="true">${dows}</div><div class="grid days" id="cal-grid">${cells}</div></section>`
+    + `<section class="card cal"><div class="grid dows" aria-hidden="true">${dows}</div><div class="grid days" id="cal-grid">${cells}</div>
+      <p class="legend" aria-hidden="true"><span><i class="dot ev"></i>Event</span><span><i class="dot task"></i>To do</span><span><i class="dot done"></i>Done</span><span><i class="dot jr"></i>Journal</span></p></section>`
     + dayAgenda(D, sel, t);
 };
 function dayAgenda(D, d, t) {

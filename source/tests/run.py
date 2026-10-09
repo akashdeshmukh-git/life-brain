@@ -133,7 +133,7 @@ def _(pg, ctx):
     check(len(acts) == 3 and 'Standup at 9:30' in acts[0] and 'Lunch at 1:00' in acts[1], acts)
     check(count(pg, '.act.past') == 1, 'the morning has passed at 3 PM')
     need = pg.inner_text('.blist.need')
-    for want in ['Old reply', 'Was due', 'moved 3 times', 'Chapter 3', 'Supervisor call', 'Tomorrow at 11', 'Bring plots', 'Walk', '4-day streak']:
+    for want in ['Old reply', 'Was due', 'moved 3 times', 'Chapter 3', 'Supervisor call', 'Tomorrow at 11', 'Bring plots', 'Walk', 'Done 4 of the last 7 days']:
         check(want in need, f'needs attention missing {want}:\n{need}')
     done = pg.inner_text('.blist.done')
     check('1 task done yesterday' in done and '“Done thing”' in done and 'Yesterday’s journal' in done and 'kept yesterday' in done, done)
@@ -204,9 +204,8 @@ def _(pg, ctx):
     pg.wait_for_timeout(100)
     pg.click('.habit[data-id]'); pg.wait_for_timeout(150)
     check(pg.get_attribute('.habit[data-id]', 'aria-pressed') == 'true', 'not ticked')
-    check(pg.inner_text('.habit[data-id] .streak') == '3', 'streak should be 3')
     go(pg, 'progress')
-    check('3 days streak' in pg.inner_text('.hrow'), pg.inner_text('.hrow'))
+    check('3 of last 7 days' in pg.inner_text('.hrow') and 'streak' not in pg.inner_text('.hrow').lower(), pg.inner_text('.hrow'))
     check(count(pg, '.h28 i') == 28 and count(pg, '.h28 i.on') == 3, '28-day grid wrong')
     pg.click('.hrow'); pg.fill('.sheet input[name=title]', 'Walk 20 min'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'habit')[0]['title'] == 'Walk 20 min', 'rename failed')
@@ -442,12 +441,87 @@ def _(pg, ctx):
 @test('Look', 'Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once')
 def _(pg, ctx):
     open_app(pg)
-    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#c6613f', '#e07a52'), 'not clay')
+    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#b5532f', '#e07a52'), 'not clay')
     for v in ['today', 'calendar', 'notes', 'progress', 'settings']:
         go(pg, v)
         check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.top h1')).fontFamily"), f'{v} title not serif')
     check(ev(pg, "() => mergeSettings({accent:'blue'}).accent") == 'clay' and ev(pg, "() => mergeSettings({accent:'blue', look:2}).accent") == 'blue' and ev(pg, "() => mergeSettings({accent:'green'}).accent") == 'green', 'accent migration')
     check(ev(pg, "() => getComputedStyle(document.querySelector('.btn')).borderRadius") == '8px', 'buttons should not be pills')
+
+@test('Tasks', 'Quick add reads a date word at the end: one step instead of five, with Undo')
+def _(pg, ctx):
+    open_app(pg)
+    add_task(pg, 'Call mom tomorrow')
+    x = recs(pg, 'task')[0]
+    check(x['title'] == 'Call mom' and x['date'] == add_days(pg, 1), f'{x}')
+    check('Added for Tomorrow' in pg.inner_text('#toast'), 'no feedback')
+    pg.click('#toast-action'); pg.wait_for_timeout(150)
+    check(len(recs(pg, 'task')) == 0, 'undo')
+    cases = ev(pg, """() => { const t = '2026-10-09'; return ['Pay rent on friday', 'Gym next week', 'Ideas someday', 'Sit in the sun', 'Buy sat nav', 'friday', 'Read paper today'].map(s => LB.parseWhen(s, t)); }""")
+    check(cases[0] == {'title': 'Pay rent', 'date': '2026-10-16'}, cases[0])
+    check(cases[1] == {'title': 'Gym', 'date': '2026-10-16'} and cases[2] == {'title': 'Ideas', 'date': ''}, cases[1:3])
+    check(cases[3] is None and cases[4] is None and cases[5] is None, 'ordinary words must not become dates')
+    check(cases[6] == {'title': 'Read paper', 'date': '2026-10-09'}, cases[6])
+    go(pg, 'calendar', add_days(pg, 3)); add_task(pg, 'Dentist tomorrow', '#add-cal')
+    check(recs(pg, 'task')[0]['title'] == 'Dentist tomorrow', 'calendar box has a fixed day and must not reinterpret words')
+
+@test('Data', 'Imported records are reshaped: bad ids, dates, times and markup are refused or neutralised')
+def _(pg, ctx):
+    open_app(pg)
+    bad = {'app': 'life-brain', 'version': 2, 'records': [
+        {'id': 'x"><img src=x onerror=alert(1)>', 'type': 'task', 'title': 'evil id'},
+        {'id': 'ok1', 'type': 'task', 'title': '<b>fine</b>', 'date': '"><svg onload=1>', 'done': 'yes', 'moved': 'lots', 'extra': {'deep': 1}},
+        {'id': 'ok2', 'type': 'event', 'title': 'E', 'date': '2026-10-10', 'time': '25:99', 'end': '10:00'},
+        {'id': 'ok3', 'type': 'journal', 'date': '2026-10-08', 'text': 'hi', 'mood': 99},
+        {'id': 'ok4', 'type': 'habit', 'title': 'H', 'log': {'2026-10-01': True, 'nope': True, '2026-13-40': True}},
+        {'id': 'ok5', 'type': 'event', 'title': 'no date', 'date': 'soon'}]}
+    v = ev(pg, '(o) => validateImport(o)', bad)
+    check(not v['ok'] and len(v['records']) == 4, f"{v['errors']} {len(v['records'])}")
+    r = {x['id']: x for x in v['records']}
+    check(r['ok1']['date'] == '' and r['ok1']['done'] is True and r['ok1']['moved'] == 0 and 'extra' not in r['ok1'], r['ok1'])
+    check(r['ok2']['time'] == '' and r['ok2']['end'] == '', r['ok2'])
+    check(r['journal-2026-10-08']['mood'] == 5, 'mood clamped')
+    check(list(r['ok4']['log'].keys()) == ['2026-10-01'], r['ok4']['log'])
+    ev(pg, "(o) => importData(validateImport(o), 'merge')", bad); pg.wait_for_timeout(200)
+    for v_ in ['home', 'today', 'calendar', 'progress']: go(pg, v_)
+    check(count(pg, 'main img, main svg[onload]') == 0, 'markup reached the page')
+
+@test('Data', 'Backup safety: Settings shows when a backup file was last saved; Home reminds only when one is overdue')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, "async () => { for (let i = 0; i < 16; i++) await put({type:'note', title:'n'+i, body:''}); }")
+    go(pg, 'home')
+    check('Save a backup file' in pg.inner_text('.brief') and 'No backup file has been saved yet' in pg.inner_text('.brief'), 'reminder missing')
+    go(pg, 'settings')
+    check('No backup file saved yet' in pg.inner_text('#backup-status'), 'status')
+    with pg.expect_download(): pg.click('[data-action=export]')
+    pg.wait_for_timeout(200)
+    check('Last backup file: Today' in pg.inner_text('#backup-status'), pg.inner_text('#backup-status'))
+    reload(pg); go(pg, 'home')
+    check('Save a backup file' not in pg.inner_text('.brief'), 'reminder should go away after a backup')
+
+@test('Accessibility', 'axe-core finds no WCAG 2.2 A/AA problems on any screen, light or dark')
+def _(pg, ctx):
+    axe = next((p for p in [os.environ.get('AXE_JS', ''), os.path.join(ROOT, 'node_modules/axe-core/axe.min.js')] if p and os.path.exists(p)), None)
+    if not axe: raise Blocked('axe-core not installed (npm i axe-core, or set AXE_JS)')
+    src = open(axe).read()
+    ctx2 = pg.context.browser.new_context(viewport={'width': 390, 'height': 844}, bypass_csp=True)
+    try:
+        for theme in ['light', 'dark']:
+            p2 = ctx2.new_page(); p2.emulate_media(color_scheme=theme)
+            p2.goto(BASE + '/'); p2.wait_for_selector('html[data-ready="1"]', state='attached')
+            ev(p2, """async () => { const t = today(); await put({type:'event', title:'E', date:t, time:'09:00'}); await put({type:'task', title:'Old', date:addDays(t,-2), done:false});
+              await put({type:'task', title:'Done', date:t, done:true, doneDate:t}); await put({type:'habit', title:'H', log:{}}); await put({type:'goal', title:'G', target:3, log:{}});
+              await put({type:'note', title:'N', body:'b'}); await put({id:journalId(t), type:'journal', date:t, text:'j', mood:3}); }""")
+            bad = []
+            for v in ['home', 'today', 'calendar', 'notes', 'notes-journal', 'progress', 'settings']:
+                n, s_ = (v.split('-') + [''])[:2]; ev(p2, f"() => LB.go('{n}', '{s_}')"); p2.wait_for_timeout(120)
+                p2.add_script_tag(content=src)
+                r = ev(p2, "async () => (await axe.run(document, {runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']})).violations.map(v => v.id + ' ×' + v.nodes.length + ' ' + v.nodes[0].target.join(' '))")
+                bad += [f'{theme}/{v}: {x}' for x in r]
+            p2.close()
+            check(not bad, '; '.join(bad))
+    finally: ctx2.close()
 
 @test('Look', 'Fits a small phone (360px) on every screen with no sideways scrolling; uses Inter')
 def _(pg, ctx):
