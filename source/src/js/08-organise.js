@@ -57,12 +57,12 @@ A['note-organise'] = () => {
   if (prov === 'none') { closeSheet(); go('settings', 'ai'); toast('Add an API key first. Any service works.'); return; }
   ORG.noteId = n.id; ORG.items = [];
   const req = organiseRequest(n);
-  openSheet({ title: 'Organise this note', body: `<p class="small">The AI reads this note and suggests tasks, events, habits and goals. Nothing is added until you check the list.</p>
-    <details class="preview-box"><summary>See exactly what will be sent</summary><pre class="preview" id="org-preview"></pre></details>
-    <p class="hint">Goes only to <b>${esc(AI.providerName(prov))}</b>.</p>
-    <div class="row-end"><button class="btn" data-action="note-back">Back</button><button class="btn primary" id="org-send" data-action="organise-send">Organise</button></div>
-    <div id="org-result"></div>`,
+  openSheet({ title: 'Organise this note', body: `<p class="small">Your AI is turning this note into tasks, events, habits and goals. Nothing is added until you tap Add.</p>
+    <div id="org-result"></div>
+    <div class="row-end tool-row"><button class="btn" data-action="note-back">Back to note</button><button class="btn" id="org-send" data-action="organise-send">Ask again</button></div>
+    <details class="preview-box"><summary>See what is sent to ${esc(AI.providerName(prov))}</summary><pre class="preview" id="org-preview"></pre></details>`,
   onMount(root) { $('#org-preview', root).textContent = ORGANISE_PROMPT + '\n\n' + req; } });
+  A['organise-send'](); // one tap: it starts right away
 };
 A['note-back'] = () => noteSheet(get(ORG.noteId));
 A['organise-send'] = async () => {
