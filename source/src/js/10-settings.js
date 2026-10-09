@@ -147,7 +147,7 @@ document.addEventListener('change', async (ev) => {
   importPreview(validateImport(obj));
 });
 let pendingImport = null;
-const NAMES = { task: 'tasks', event: 'events', note: 'notes', journal: 'journal entries', habit: 'habits', goal: 'goals' };
+const NAMES = { task: 'tasks', event: 'events', note: 'notes', habit: 'habits', goal: 'goals' };
 function importPreview(v) {
   pendingImport = v;
   openSheet({ title: 'Import backup', body: v.ok
@@ -176,7 +176,7 @@ A['snap-restore'] = async (el) => {
   toast('Backup restored');
 };
 A.wipe = async () => {
-  if (!(await confirmSheet({ title: 'Delete everything?', text: 'Every task, event, note, journal entry, habit, goal, key and backup on this phone is erased. This can’t be undone.', confirmLabel: 'Delete everything', danger: true, requireText: 'DELETE' }))) return;
+  if (!(await confirmSheet({ title: 'Delete everything?', text: 'Every task, event, note, habit, goal, key and backup on this phone is erased. This can’t be undone.', confirmLabel: 'Delete everything', danger: true, requireText: 'DELETE' }))) return;
   await deleteEverything();
   snapCache = null;
   go('home');

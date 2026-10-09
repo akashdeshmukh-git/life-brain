@@ -74,7 +74,12 @@ async function dbInit() {
   try { idb = await openDB(); S.storage = 'ok'; }
   catch (e) { idb = null; S.storage = 'unavailable'; console.warn('IndexedDB unavailable', e); return; }
   try {
-    for (const r of (await idbDo('records', 'readonly', (st) => st.getAll())) || []) { const c = cleanRecord(r); if (c) S.records.set(c.id, c); }
+    const fix = [], drop = [];
+    for (const r of (await idbDo('records', 'readonly', (st) => st.getAll())) || []) {
+      const c = cleanRecord(r);
+      if (c) { S.records.set(c.id, c); if (r.type === 'journal') fix.push(c); } else if (r && r.id) drop.push(r.id);
+    }
+    if (fix.length || drop.length) await persist('records', (st) => { fix.forEach((c) => st.put(c)); drop.forEach((id) => st.delete(id)); }); // store converted journal entries once
     for (const m of (await idbDo('meta', 'readonly', (st) => st.getAll())) || []) {
       if (m.key === 'settings') S.settings = mergeSettings(m.value);
       if (m.key === 'aiKeys' && m.value && typeof m.value === 'object') S.aiKeys = { ...m.value };
@@ -100,7 +105,11 @@ function cleanRecord(r) {
     case 'task': return { ...b, title: str(r.title, 300) || 'Task', date: day(r.date), done: !!r.done, doneDate: r.done ? day(r.doneDate) : '', note: str(r.note, 4000), moved: clamp(Math.round(Number(r.moved) || 0), 0, 999) };
     case 'event': { const time = TIME.test(r.time || '') ? r.time : ''; return day(r.date) ? { ...b, title: str(r.title, 300) || 'Event', date: day(r.date), time, end: time && TIME.test(r.end || '') ? r.end : '', note: str(r.note, 4000) } : null; }
     case 'note': return { ...b, title: str(r.title, 200), body: str(r.body, 100000), pinned: !!r.pinned };
-    case 'journal': return day(r.date) ? { ...b, id: 'journal-' + r.date, date: r.date, text: str(r.text, 100000), mood: clamp(Math.round(Number(r.mood) || 0), 0, 5) } : null;
+    case 'journal': { // the journal was folded into Notes: each written day becomes a dated note with the same id
+      const text = str(r.text, 100000).trim(), mood = ['', '😞', '😕', '😐', '🙂', '😄'][clamp(Math.round(Number(r.mood) || 0), 0, 5)];
+      if (!day(r.date) || !text) return null;
+      return { ...b, id: 'journal-' + r.date, type: 'note', title: 'Journal · ' + fmtDate(r.date, { month: 'short', day: 'numeric', year: 'numeric' }), body: (mood ? mood + ' ' : '') + text, pinned: false, createdAt: isoOr(r.createdAt) || r.date + 'T21:00:00.000Z' };
+    }
     case 'habit': return { ...b, title: str(r.title, 80) || 'Habit', log: dayLog(r.log, false), archived: !!r.archived };
     case 'goal': return { ...b, title: str(r.title, 120) || 'Goal', target: clamp(Math.round(Number(r.target) || 1), 1, 100000), unit: str(r.unit, 20), log: dayLog(r.log, true) };
   }

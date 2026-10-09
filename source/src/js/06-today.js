@@ -1,4 +1,4 @@
-/* ===== Today: today's tasks, habit ticks, one journal box ===== */
+/* ===== Today: today's tasks and habit ticks ===== */
 const ui = { anytime: true, done: false };
 
 /* One task row. The circle ticks it; the rest opens it. */
@@ -21,7 +21,6 @@ VIEWS.today = () => {
   const anytime = D.tasks.filter((x) => !x.done && !x.date).sort(byCreated);
   const done = doneOn(D, t).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   const overdue = open.filter((x) => x.date < t).length;
-  const j = journalOn(t) || {};
   return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })))
     + (events.length ? `<section class="card">${events.map(eventRow).join('')}</section>` : '')
     + `<section class="card tasks">${addTaskForm(t, 'add-today', 'Add a task (try “… tomorrow”)', true)}
@@ -34,11 +33,8 @@ VIEWS.today = () => {
     </section>`
     + `<section class="card">${sectionH('Habits', D.habits.length ? '<button class="link" data-action="nav" data-to="progress">History</button>' : '')}
       <div class="habits">${D.habits.sort(byCreated).map((h) => { const on = habitDone(h, t); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${t}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}</button>`; }).join('')}
-        <button class="habit add" data-action="habit-new" aria-label="Add a habit">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`
-    + `<section class="card">${sectionH('Journal')}${moodRow(t, j.mood)}
-      <textarea class="journal" id="journal-${t}" data-journal="${t}" rows="3" placeholder="How was today?" aria-label="Journal for today">${esc(j.text || '')}</textarea></section>`;
+        <button class="habit add" data-action="habit-new" aria-label="Add a habit">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`;
 };
-const moodRow = (date, mood) => `<div class="moods" role="radiogroup" aria-label="Mood">${MOODS.map(([v, f, l]) => `<button class="mood" role="radio" data-action="mood" data-date="${date}" data-v="${v}" aria-checked="${Number(mood) === Number(v)}" aria-label="${l}" title="${l}">${f}</button>`).join('')}</div>`;
 
 A.fold = (el) => { ui[el.dataset.k] = !ui[el.dataset.k]; render(); };
 
@@ -110,7 +106,7 @@ A.delete = async (el) => {
   if (!r) return;
   closeSheet();
   await del(r.id);
-  const name = { task: 'Task', event: 'Event', note: 'Note', journal: 'Journal entry', habit: 'Habit', goal: 'Goal' }[r.type] || 'Item';
+  const name = { task: 'Task', event: 'Event', note: 'Note', habit: 'Habit', goal: 'Goal' }[r.type] || 'Item';
   toast(`${name} deleted`, '', { action: 'Undo', onAction: () => put(r) });
 };
 
@@ -161,25 +157,3 @@ F.habit = async (form, v) => {
   closeSheet();
 };
 
-/* ---- Journal: saved as you type ---- */
-async function saveJournal(date, patch) {
-  const old = journalOn(date) || { id: journalId(date), type: 'journal', date, text: '', mood: 0 };
-  return put({ ...old, ...patch }, { quiet: !('mood' in patch) });
-}
-document.addEventListener('input', (ev) => {
-  const d = ev.target.dataset && ev.target.dataset.journal;
-  if (d) saveJournal(d, { text: ev.target.value }).catch((e) => toast(e.message, 'bad'));
-});
-A.mood = async (el) => {
-  const d = el.dataset.date, cur = (journalOn(d) || {}).mood, v = Number(el.dataset.v);
-  const ta = $(`[data-journal="${d}"]`);
-  await saveJournal(d, { mood: Number(cur) === v ? 0 : v, ...(ta ? { text: ta.value } : {}) });
-  if (SH.open) journalSheet(d); // refresh the open sheet
-};
-function journalSheet(date) {
-  const j = journalOn(date) || {};
-  openSheet({ title: fmtDate(date, { weekday: 'long', month: 'long', day: 'numeric' }), body: `${moodRow(date, j.mood)}
-    <textarea class="journal big" id="journal-sheet" data-journal="${date}" rows="10" placeholder="How was the day?" aria-label="Journal">${esc(j.text || '')}</textarea>
-    <div class="row-end">${j.id ? `<button type="button" class="btn danger" data-action="delete" data-id="${j.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary" data-action="sheet-close">Done</button></div>` });
-}
-A['journal-open'] = (el) => journalSheet(el.dataset.date || today());

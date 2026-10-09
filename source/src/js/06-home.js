@@ -115,8 +115,6 @@ function alreadySorted(D, t) {
   const keptY = D.habits.filter((h) => habitDone(h, y));
   if (keptY.length) out.push({ title: `${keptY.length === 1 ? 'A habit' : plural(keptY.length, 'habit')} kept yesterday`, attrs: act('nav', 'data-to="progress"'), text: `${esc(joinAnd(keptY.slice(0, 3).map((h) => h.title)))}${keptY.length === 1 && habitStreak(keptY[0], y) > 1 ? `, ${habitStreak(keptY[0], y)} days in a row` : ''}.` });
   D.goals.filter((g) => goalNow(g) >= Number(g.target) && Object.keys(g.log || {}).some((d) => d >= addDays(t, -6))).slice(0, 1).forEach((g) => out.push({ title: `${g.title}: reached`, attrs: act('nav', 'data-to="progress"'), text: `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, in the last week.` }));
-  const jy = journalOn(y);
-  if (jy && (String(jy.text || '').trim() || Number(jy.mood))) out.push({ title: 'Yesterday’s journal', attrs: act('journal-open', `data-date="${y}"`), text: `${Number(jy.mood) ? moodFace(jy.mood) + ' ' : ''}${esc(trunc(String(jy.text || '').replace(/\s+/g, ' '), 110)) || 'Mood only.'}` });
   return out.slice(0, 4);
 }
 

@@ -1,5 +1,5 @@
 'use strict';
-/* ===== Life Brain: notes, calendar, tasks, journal, habits, progress and AI, kept on this device. ===== */
+/* ===== Life Brain: tasks, calendar, notes, habits, progress and AI, kept on this device. ===== */
 const LB = (window.LB = {});
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];

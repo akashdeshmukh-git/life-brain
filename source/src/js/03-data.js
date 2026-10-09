@@ -3,7 +3,7 @@ const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || 
 const byCreated = (a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
 function data() {
   return {
-    tasks: all('task'), events: all('event'), notes: all('note'), journals: all('journal'), habits: all('habit').filter((h) => !h.archived), goals: all('goal'),
+    tasks: all('task'), events: all('event'), notes: all('note'), habits: all('habit').filter((h) => !h.archived), goals: all('goal'),
   };
 }
 LB.data = data;
@@ -14,11 +14,8 @@ const tasksOn = (D, date) => D.tasks.filter((x) => x.date === date || (x.done &&
 const doneOn = (D, date) => D.tasks.filter((x) => x.done && x.doneDate === date);
 const eventsOn = (D, date) => D.events.filter((e) => e.date === date).sort((a, b) => (a.time || '').localeCompare(b.time || '') || byTitle(a, b));
 
-/* Journal: one entry per day */
-const journalId = (date) => 'journal-' + date;
-const journalOn = (date) => get(journalId(date));
-const MOODS = [['1', '😞', 'Bad'], ['2', '😕', 'Low'], ['3', '😐', 'Okay'], ['4', '🙂', 'Good'], ['5', '😄', 'Great']];
-const moodFace = (m) => (MOODS.find((x) => Number(x[0]) === Number(m)) || [])[1] || '';
+/* Notes written on a given day (by when they were first saved) */
+const notesOn = (D, date) => D.notes.filter((n) => String(n.createdAt || '').slice(0, 10) === date || (n.id === 'journal-' + date));
 
 /* Habits */
 const habitDone = (h, date) => !!(h.log && h.log[date]);
@@ -36,15 +33,6 @@ const goalPct = (g) => clamp(goalNow(g) / (Number(g.target) || 1), 0, 1);
 /* ---- Patterns: what your own records show that's easy to miss. Plain sentences, only with enough data. ---- */
 function patterns(D = data(), t = today()) {
   const out = [];
-  // 1. Moods that move with a habit
-  const moods = D.journals.filter((j) => Number(j.mood) > 0 && j.date <= t && daysBetween(j.date, t) <= 60);
-  for (const h of D.habits) {
-    const yes = moods.filter((j) => habitDone(h, j.date)).map((j) => Number(j.mood));
-    const no = moods.filter((j) => !habitDone(h, j.date)).map((j) => Number(j.mood));
-    if (yes.length < 4 || no.length < 4) continue;
-    const a = yes.reduce((s, x) => s + x, 0) / yes.length, b = no.reduce((s, x) => s + x, 0) / no.length;
-    if (Math.abs(a - b) >= 0.6) out.push({ id: 'mood-' + h.id, text: `Your mood is ${a > b ? 'better' : 'worse'} on days you do “${h.title}” (${a.toFixed(1)} vs ${b.toFixed(1)} out of 5).` });
-  }
   // 2. A habit that slipped this week
   for (const h of D.habits) {
     const before = habitCount(h, addDays(t, -13), addDays(t, -7)), now = habitCount(h, addDays(t, -6), t);
@@ -81,12 +69,9 @@ function weekStats(D = data(), t = today()) {
   // Count each habit only from the day it was added, so a new habit doesn't start at 14%.
   const since = (h) => { const c = String(h.createdAt || '').slice(0, 10), first = Object.keys(h.log || {}).sort()[0] || t; const s = [isYmd(c) ? c : t, first].sort()[0]; return s > from ? s : from; };
   const hDays = D.habits.reduce((n, h) => n + daysBetween(since(h), t) + 1, 0), hDone = D.habits.reduce((n, h) => n + habitCount(h, from, t), 0);
-  const js = D.journals.filter((j) => j.date >= from && j.date <= t && (String(j.text || '').trim() || Number(j.mood) > 0));
-  const moods = js.map((j) => Number(j.mood)).filter((m) => m > 0);
   return {
     perDay, tasks: perDay.reduce((s, x) => s + x.n, 0),
     habitRate: hDays ? hDone / hDays : null,
-    journalDays: js.length,
-    mood: moods.length ? moods.reduce((a, b) => a + b, 0) / moods.length : null,
+    overdue: D.tasks.filter((x) => isOverdue(x, t)).length,
   };
 }

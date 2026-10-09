@@ -1,6 +1,6 @@
 /* ===== AI: any API key, recognised automatically. Nothing is sent until you've seen it and pressed Send. ===== */
 const AI = (LB.AI = {});
-const SYSTEM_PROMPT = `You look at one person's own records from Life Brain (tasks, calendar, journal, habits, goals, notes) and tell them what they may not be seeing.
+const SYSTEM_PROMPT = `You look at one person's own records from Life Brain (tasks, calendar, habits, goals, notes) and tell them what they may not be seeing.
 Rules:
 - Work only from the records given. Say plainly when there is too little to go on.
 - Point out patterns: what keeps slipping, what goes with good and bad days, where time really goes, what they keep avoiding.
@@ -167,7 +167,6 @@ const SCOPES = {
     return L.join('\n');
   } },
   calendar: { label: 'Calendar (last 30 and next 14 days)', on: true, build: (D, t) => D.events.filter((e) => e.date >= addDays(t, -30) && e.date <= addDays(t, 14)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).map((e) => `${e.date}${e.time ? ' ' + e.time : ''}: ${e.title}`).join('\n') },
-  journal: { label: 'Journal and mood (last 30 days)', on: true, build: (D, t) => D.journals.filter((j) => j.date >= addDays(t, -30) && j.date <= t).sort((a, b) => a.date.localeCompare(b.date)).map((j) => `${j.date}${Number(j.mood) ? ` mood ${j.mood}/5` : ''}: ${trunc(String(j.text || '').replace(/\s+/g, ' '), 400)}`).join('\n') },
   habits: { label: 'Habits (last 30 days)', on: true, build: (D, t) => D.habits.map((h) => {
     const days = [...Array(30)].map((_, i) => (habitDone(h, addDays(t, i - 29)) ? '■' : '·')).join('');
     return `${h.title}: ${habitCount(h, addDays(t, -29), t)}/30 days, streak ${habitStreak(h, t)} | ${days} (oldest → today)`;
