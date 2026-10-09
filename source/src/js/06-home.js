@@ -27,7 +27,7 @@ function waitingTask(D, t) {
 }
 function headline(D, t, sp, shape) {
   const nm = String(S.settings.name || '').trim(), n = nm ? `, ${esc(nm)}` : '';
-  const near = D.goals.find((g) => Number(g.target) - goalNow(g) === 1);
+  const near = D.goals.find((g) => goalIsNumber(g) && Number(g.target) - goalNow(g) === 1);
   if (near) return `One more and ${esc(quoted(near.title))} is done${n}.`;
   if (shape === 'open') {
     const w = waitingTask(D, t);
@@ -90,7 +90,7 @@ const briefItem = (it) => `<li><button class="bi-title" ${it.attrs}>${esc(it.tit
 const act = (id, extra = '') => `data-action="${id}" ${extra}`;
 
 function needsAttention(D, t) {
-  const out = [...pendingItems()]; // suggestions your AI prepared by itself come first
+  const out = []; // AI suggestions and fixes sit above, under Fixes for you
   const over = D.tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date));
   over.slice(0, 3).forEach((x) => out.push({ title: x.title, attrs: act('task-edit', `data-id="${x.id}"`), text: `Was due ${esc(dueWord(x.date, t))}, still open${(x.moved || 0) >= 2 ? `, moved ${x.moved} times` : ''}.` }));
   if (over.length > 3) out.push({ title: `${over.length - 3} more overdue`, attrs: act('nav', 'data-to="today"'), text: 'On the <u>Today</u> list.' });
@@ -105,7 +105,7 @@ function needsAttention(D, t) {
   eventsOn(D, tm).slice(0, 2).forEach((e) => out.push({ title: e.title, attrs: act('event-edit', `data-id="${e.id}"`), text: `Tomorrow${e.time ? ' at ' + esc(fmtTime(e.time)) : ''}${e.note ? `. The note says: ${esc(trunc(e.note.split('\n')[0], 90))}` : ''}.` }));
   // A gentle reminder for habits you usually do: framed as a weekly count, not a streak that can 'break'.
   D.habits.map((h) => ({ h, n: habitCount(h, addDays(t, -7), addDays(t, -1)) })).filter((x) => !habitDone(x.h, t) && x.n >= 3).slice(0, 2).forEach(({ h, n }) => out.push({ title: h.title, attrs: act('nav', 'data-to="today"'), text: `Not ticked yet today. Done ${n} of the last 7 days.` }));
-  D.goals.filter((g) => { const left = Number(g.target) - goalNow(g); return left > 0 && left <= 2; }).slice(0, 1).forEach((g) => out.push({ title: g.title, attrs: act('nav', 'data-to="progress"'), text: `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, ${Number(g.target) - goalNow(g)} to go.` }));
+  D.goals.filter((g) => { const left = Number(g.target) - goalNow(g); return goalIsNumber(g) && left > 0 && left <= 2; }).slice(0, 1).forEach((g) => out.push({ title: g.title, attrs: act('goal-open', `data-id="${g.id}"`), text: `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, ${Number(g.target) - goalNow(g)} to go.` }));
   // Everything lives only on this phone, so a backup file is the one safety net against a cleared browser.
   const n = S.records.size, last = S.lastExport ? daysBetween(S.lastExport.slice(0, 10), t) : null;
   if (n >= 15 && (last == null || last >= 30)) out.push({ title: 'Save a backup file', attrs: act('nav', 'data-to="settings"'), text: `Everything lives only on this phone. ${last == null ? 'No backup file has been saved yet' : `The last backup file was saved ${last} days ago`}; one is a tap away in <u>Settings</u>.` });
@@ -121,7 +121,7 @@ function alreadySorted(D, t) {
   if (doneY.length) out.push({ title: `${plural(doneY.length, 'task')} done yesterday`, attrs: act('nav', `data-to="calendar" data-sub="${y}"`), text: `${esc(joinAnd(doneY.slice(0, 3).map((x) => quoted(x.title))))}${doneY.length > 3 ? ' and more' : ''}.` });
   const keptY = D.habits.filter((h) => habitDone(h, y));
   if (keptY.length) out.push({ title: `${keptY.length === 1 ? 'A habit' : plural(keptY.length, 'habit')} kept yesterday`, attrs: act('nav', 'data-to="progress"'), text: `${esc(joinAnd(keptY.slice(0, 3).map((h) => h.title)))}${keptY.length === 1 && habitStreak(keptY[0], y) > 1 ? `, ${habitStreak(keptY[0], y)} days in a row` : ''}.` });
-  D.goals.filter((g) => goalNow(g) >= Number(g.target) && Object.keys(g.log || {}).some((d) => d >= addDays(t, -6))).slice(0, 1).forEach((g) => out.push({ title: `${g.title}: reached`, attrs: act('nav', 'data-to="progress"'), text: `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, in the last week.` }));
+  D.goals.filter((g) => (goalIsNumber(g) ? goalNow(g) >= Number(g.target) && Object.keys(g.log || {}).some((d) => d >= addDays(t, -6)) : g.done && g.doneDate >= addDays(t, -6))).slice(0, 1).forEach((g) => out.push({ title: `${g.title}: reached`, attrs: act('goal-open', `data-id="${g.id}"`), text: goalIsNumber(g) ? `${goalNow(g)} of ${esc(g.target)}${g.unit ? ' ' + esc(g.unit) : ''}, in the last week.` : 'Marked done this week.' }));
   return out.slice(0, 4);
 }
 
@@ -130,8 +130,6 @@ VIEWS.home = () => {
   const sp = spans(eventsOn(D, t)), shape = dayShape(sp);
   const used = {};
   const need = needsAttention(D, t), done = alreadySorted(D, t);
-  const shown = need.map((it) => (it.attrs.match(/data-id="([^"]+)"/) || [])[1]).filter(Boolean);
-  const pats = patterns(D, t).filter((p) => !shown.some((id) => p.id === 'moved-' + id)).slice(0, 2); // don't say the same thing twice
   const dateLine = `${fmtDate(t, { weekday: 'long' })} · ${fmtDate(t, { month: 'long', day: 'numeric' })} ${t.slice(0, 4)}`;
   const part = nowMin < 12 * 60 ? 'this morning' : nowMin < 17 * 60 ? 'this afternoon' : 'this evening';
   const list = (title, items, cls) => items.length ? `<section class="blist ${cls}"><h2>${title}</h2><ol>${items.map(briefItem).join('')}</ol></section>` : '';
@@ -144,8 +142,9 @@ VIEWS.home = () => {
       <div class="acts">${ACTS.map((a) => `<div class="act${nowMin >= a.to ? ' past' : ''}"><b>${a.label}</b><p>${actSentence(a, sp, D, t, used)}</p></div>`).join('')}</div>
     </div></div>
     <div class="brief-bottom"><div class="brief-in">
+      ${headingSection(D, t)}
+      ${fixesSection(D, t)}
       ${need.length || done.length ? list('Needs attention', need, 'need') + list('Already sorted', done, 'done') : `<p class="calm">Nothing needs you ${part}.</p>`}
-      ${pats.length ? `<section class="blist know"><h2>Worth knowing</h2><ol>${pats.map((p) => `<li><p class="solo">${esc(p.text)}</p></li>`).join('')}</ol></section>` : ''}
     </div></div></div>`;
 };
 let homeResize;

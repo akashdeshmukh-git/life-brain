@@ -189,13 +189,14 @@ A.intro = () => {
   closeMenu();
   const row = (ic, name, text) => `<li><span class="nav-ic">${icon(ic)}</span><span><b>${name}</b><br>${text}</span></li>`;
   openSheet({ title: 'How Life Brain works', body: `<ul class="intro">
-      ${row('home', 'Home', 'Open the app here. It tells you what’s on today and what needs you.')}
+      ${row('home', 'Home', 'Open the app here. It shows what’s on today, where your days are heading compared with your goals, and fixes you can apply in one tap.')}
       ${row('today', 'Today', 'Type a task and press Enter. Tap the circle when it’s done. End with “tomorrow” or “friday” to plan ahead.')}
       ${row('calendar', 'Calendar', 'Tap a day to see it, or add a task, event or note to it.')}
+      ${row('goal', 'Goals', 'Say what you want. Tie tasks and habits to it, and Home shows whether your days are heading there.')}
       ${row('notes', 'Notes', 'Write down the why. Tap Organise to turn a brain dump into tasks.')}
-      ${row('progress', 'Progress', 'Habits to keep, goals to count toward, and what you might be missing.')}
+      ${row('progress', 'Progress', 'Your week in numbers, habits to keep, and what you might be missing.')}
     </ul>
-    <p class="small">Everything is in the menu <b>☰</b> at the top left. Buttons marked ✦ use your AI, and always show you what they’ll do before anything changes.</p>
+    <p class="small">Everything is in the menu <b>☰</b> at the top left. Buttons marked ✦ use your AI. Nothing changes until you tap, and Undo takes it back.</p>
     <div class="row-end"><button class="btn primary" data-action="intro-done">Got it</button></div>` });
 };
 A['intro-done'] = async () => { closeSheet(); if (!S.settings.introSeen) await saveSettings({ introSeen: true }); };

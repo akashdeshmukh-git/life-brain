@@ -4,6 +4,7 @@ const SYSTEM_PROMPT = `You look at one person's own records from Life Brain (tas
 Rules:
 - Work only from the records given. Say plainly when there is too little to go on.
 - Point out patterns: what keeps slipping, what goes with good and bad days, where time really goes, what they keep avoiding.
+- If they gave goals, compare where their effort went with what they said they want: which goals are moving, which are stalled.
 - Never diagnose their psychology or character.
 - End with at most three small, concrete things to try next week.
 - Be short: under 250 words, plain words, short lists.`;
@@ -163,7 +164,7 @@ const SCOPES = {
   tasks: { label: 'Tasks (last 30 days and open)', on: true, build: (D, t) => {
     const from = addDays(t, -30), L = [];
     D.tasks.filter((x) => x.done && isYmd(x.doneDate) && x.doneDate >= from).sort((a, b) => a.doneDate.localeCompare(b.doneDate)).forEach((x) => L.push(`Done ${x.doneDate}: ${x.title}${x.date && x.date !== x.doneDate ? ` (was due ${x.date})` : ''}`));
-    D.tasks.filter((x) => !x.done).forEach((x) => L.push(`Open: ${x.title}${x.date ? ` | due ${x.date}${x.date < t ? ' (overdue)' : ''}` : ' | no date'}${x.moved ? ` | moved ${x.moved}×` : ''}`));
+    D.tasks.filter((x) => !x.done).forEach((x) => L.push(`Open: ${x.title}${x.goalId && get(x.goalId) ? ` | goal: ${get(x.goalId).title}` : ''}${x.date ? ` | due ${x.date}${x.date < t ? ' (overdue)' : ''}` : ' | no date'}${x.moved ? ` | moved ${x.moved}×` : ''}`));
     return L.join('\n');
   } },
   calendar: { label: 'Calendar (last 30 and next 14 days)', on: true, build: (D, t) => D.events.filter((e) => e.date >= addDays(t, -30) && e.date <= addDays(t, 14)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).map((e) => `${e.date}${e.time ? ' ' + e.time : ''}: ${e.title}`).join('\n') },
@@ -171,7 +172,7 @@ const SCOPES = {
     const days = [...Array(30)].map((_, i) => (habitDone(h, addDays(t, i - 29)) ? '■' : '·')).join('');
     return `${h.title}: ${habitCount(h, addDays(t, -29), t)}/30 days, streak ${habitStreak(h, t)} | ${days} (oldest → today)`;
   }).join('\n') },
-  goals: { label: 'Goals', on: true, build: (D) => D.goals.map((g) => `${g.title}: ${goalNow(g)} of ${g.target}${g.unit ? ' ' + g.unit : ''}`).join('\n') },
+  goals: { label: 'Goals, and where the last 4 weeks of work went', on: true, build: (D, t) => { const dir = direction(D, t); return D.goals.map((g) => goalForAI(D, g, t)).join('\n') + (dir.total ? `\nTasks finished in 4 weeks: ${dir.parts.filter((p) => p.n).map((p) => `${p.g.title} ${p.n}`).concat(`no goal ${dir.none}`).join(', ')}` : ''); } },
   patterns: { label: 'Patterns the app found', on: true, build: (D, t) => patterns(D, t).map((p) => '- ' + p.text).join('\n') },
   notes: { label: 'Notes', on: false, build: (D) => D.notes.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 15).map((n) => `${n.title || 'Untitled'}: ${trunc(String(n.body || '').replace(/\s+/g, ' '), 300)}`).join('\n') },
 };
