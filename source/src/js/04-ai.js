@@ -129,7 +129,7 @@ async function checkKey(p) {
   return `Key works · ${plural(list.length, 'model')} available`;
 }
 
-async function callProvider(p, user, signal) {
+async function callProvider(p, user, signal, system = SYSTEM_PROMPT) {
   const key = S.aiKeys[p] || '';
   if (!key && !PROVIDERS[p].local && p !== 'custom') throw aiErr('missing_key', `No API key is saved for ${PROVIDERS[p].name}. Add one in Settings → AI.`);
   const model = provModel(p);
@@ -138,23 +138,23 @@ async function callProvider(p, user, signal) {
   const json = { 'Content-Type': 'application/json' };
   let body, text;
   if (st === 'anthropic') {
-    body = await aiFetch(base + '/messages', { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ model, max_tokens: 1200, temperature: 0.4, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: user }] }) }, { signal });
+    body = await aiFetch(base + '/messages', { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ model, max_tokens: 2000, temperature: 0.4, system, messages: [{ role: 'user', content: user }] }) }, { signal });
     text = (body.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
   } else if (st === 'gemini') {
-    body = await aiFetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig: { temperature: 0.4 } }) }, { signal });
+    body = await aiFetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig: { temperature: 0.4 } }) }, { signal });
     const c = body.candidates && body.candidates[0];
     text = c && c.content && (c.content.parts || []).map((x) => x.text || '').join('');
     if (!text && c && c.finishReason && c.finishReason !== 'STOP') throw aiErr('refused', `Gemini stopped without an answer (${c.finishReason}).`);
   } else {
-    body = await aiFetch(base + '/chat/completions', { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ model, temperature: 0.4, messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: user }] }) }, { signal });
+    body = await aiFetch(base + '/chat/completions', { method: 'POST', headers: { ...json, ...authHeaders(p, key) }, body: JSON.stringify({ model, temperature: 0.4, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }) }, { signal });
     text = body && body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
   }
   if (!text || !String(text).trim()) throw aiErr('empty', 'The service answered with no text.');
   return String(text);
 }
-AI.call = (user, { signal } = {}) => {
+AI.call = (user, { signal, system } = {}) => {
   const p = AI.provider();
-  if (PROVIDERS[p]) return callProvider(p, user, signal);
+  if (PROVIDERS[p]) return callProvider(p, user, signal, system || SYSTEM_PROMPT);
   return Promise.reject(aiErr('none', 'No AI is set up yet. Paste an API key in Settings → AI.'));
 };
 

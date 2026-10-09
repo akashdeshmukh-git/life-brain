@@ -1,8 +1,8 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **33 of 33 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **35 of 35 PASSED**.
 
-AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them). The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
+AI calls were tested against a local mock service, including Organise. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them). How well a real model sorts a messy note is therefore untested. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
 | Area | Test | Result |
 |---|---|---|
@@ -24,6 +24,8 @@ AI calls were tested against a local mock service. Real AI services: NOT TESTED 
 | Patterns | Finds a slipped habit, a task moved again and again, and the overdue pile | PASSED |
 | Patterns | Says nothing when there is too little data | PASSED |
 | AI | Preview shows exactly what is sent; notes are off by default; answer is rendered safely and can be saved | PASSED |
+| AI | Organise a note: the AI suggests tasks, events, habits and goals; you check them; Add puts each where it belongs; Undo takes them back | PASSED |
+| AI | Organise: an answer that is not a list gives a plain error; no key sends you to Settings | PASSED |
 | AI | Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error | PASSED |
 | AI | Paste a key: the service is recognised, checked, and a model chosen | PASSED |
 | Data | Export then import (add and replace) round-trips everything | PASSED |
