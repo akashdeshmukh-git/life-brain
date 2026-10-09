@@ -10,7 +10,9 @@ Tasks, calendar, notes, journal, habits and goals in one simple app, with an opt
 - **Notes.** Notes you can search and pin. The *Journal* switch lists every journal entry.
 - **Progress.** The last 7 days in numbers, your habit streaks and goals, and **What you might be missing**: plain sentences the app finds in your own records, like a habit that goes with better days, one that slipped, or a task you keep moving. **Ask AI what it sees** sends the last month to an AI of your choice. You see exactly what will be sent first, and notes are left out unless you tick them.
 
-Settings (the gear) has the theme (Auto, Light, true-black Dark), the colour, the AI key, and backups.
+Every screen shares Home's look: warm paper and ink, serif titles, thin lines instead of boxes, and one clay accent. Dark is true black.
+
+Settings (the gear) has your name, the theme (Auto, Light, Dark), the accent colour, the AI key, and backups.
 
 ## AI
 

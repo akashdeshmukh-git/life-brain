@@ -1,6 +1,7 @@
 /* ===== UI core: theme, tabs, screens, taps, sheets, toasts ===== */
 /* One colour for ticks, the current tab and buttons. light/dark: the colour on white and on black. */
 const ACCENTS = {
+  clay: { name: 'Clay', light: '#c6613f', dark: '#e07a52' },
   blue: { name: 'Blue', light: '#1a73e8', dark: '#8ab4f8' },
   green: { name: 'Green', light: '#188038', dark: '#81c995' },
   purple: { name: 'Purple', light: '#9334e6', dark: '#c58af9' },
@@ -11,11 +12,11 @@ const ACCENTS = {
 LB.ACCENTS = ACCENTS;
 const isDark = () => S.settings.theme === 'dark' || (S.settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
 function applyTheme() {
-  const root = document.documentElement, dark = isDark(), a = ACCENTS[S.settings.accent] || ACCENTS.blue;
+  const root = document.documentElement, dark = isDark(), a = ACCENTS[S.settings.accent] || ACCENTS.clay;
   root.dataset.theme = dark ? 'dark' : 'light';
   root.style.setProperty('--accent', dark ? a.dark : a.light);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = dark ? '#000000' : '#ffffff';
+  if (meta) meta.content = dark ? '#0b0b0a' : '#f9f9f7';
 }
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (_) {}
 

@@ -437,7 +437,17 @@ def _(pg, ctx):
     reload(pg)
     check(ev(pg, '() => document.documentElement.dataset.theme') == 'dark' and ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") == '#81c995', 'not persisted')
     pg.click('[data-action=set-theme][data-v=light]'); pg.wait_for_timeout(100)
-    check(ev(pg, '() => getComputedStyle(document.body).backgroundColor') == 'rgb(255, 255, 255)', 'light')
+    check(ev(pg, '() => getComputedStyle(document.body).backgroundColor') == 'rgb(252, 252, 251)', 'light')
+
+@test('Look', 'Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once')
+def _(pg, ctx):
+    open_app(pg)
+    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#c6613f', '#e07a52'), 'not clay')
+    for v in ['today', 'calendar', 'notes', 'progress', 'settings']:
+        go(pg, v)
+        check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.top h1')).fontFamily"), f'{v} title not serif')
+    check(ev(pg, "() => mergeSettings({accent:'blue'}).accent") == 'clay' and ev(pg, "() => mergeSettings({accent:'blue', look:2}).accent") == 'blue' and ev(pg, "() => mergeSettings({accent:'green'}).accent") == 'green', 'accent migration')
+    check(ev(pg, "() => getComputedStyle(document.querySelector('.btn')).borderRadius") == '8px', 'buttons should not be pills')
 
 @test('Look', 'Fits a small phone (360px) on every screen with no sideways scrolling; uses Inter')
 def _(pg, ctx):

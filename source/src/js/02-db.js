@@ -4,7 +4,8 @@ const DB_NAME = 'lifebrain2';
 const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
   name: '',
-  accent: 'blue',
+  accent: 'clay',
+  look: 2, // 2 = the warm look; older saved settings move to clay once
   ai: { active: 'auto', linked: [], models: {}, baseUrls: {}, timeoutSec: 60, rememberKeys: false },
 };
 const S = (LB.S = {
@@ -64,6 +65,7 @@ function mergeSettings(v) {
   if (!Array.isArray(ai.linked)) ai.linked = [];
   const out = { ...d, ...(v || {}), ai };
   if (!['system', 'light', 'dark'].includes(out.theme)) out.theme = 'system';
+  if (v && v.look !== 2) { out.look = 2; if (!v.accent || v.accent === 'blue') out.accent = 'clay'; }
   return out;
 }
 async function dbInit() {
