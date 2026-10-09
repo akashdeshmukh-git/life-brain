@@ -13,6 +13,7 @@ VIEWS.settings = (sub) => {
       <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
       <div class="swatches" role="radiogroup" aria-label="Colour">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-action="set-accent" data-v="${k}" aria-checked="${st.accent === k}" aria-label="${a.name}" title="${a.name}" style="--c:${isDark() ? a.dark : a.light}"></button>`).join('')}</div></section>`
     + `<section class="card" id="ai-card">${sectionH('AI')}${aiSection()}</section>`
+    + `<section class="card" id="auto-card">${sectionH('Automatic')}${autoSection()}</section>`
     + `<section class="card">${sectionH('Your data')}
       <p class="small">Everything stays on this phone. No account, no server. ${offline}</p>
       <p class="small" id="backup-status">${S.lastExport ? `Last backup file: ${esc(relDate(S.lastExport.slice(0, 10)))}.` : 'No backup file saved yet.'} ${S.persisted === true ? 'The browser has agreed not to clear this data on its own.' : S.persisted === false ? 'The browser may clear this data if the phone runs low on space, so keep a backup file.' : ''}</p>

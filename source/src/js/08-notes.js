@@ -22,6 +22,7 @@ A['note-new'] = (el) => { newNoteDay = (el && el.dataset && isYmd(el.dataset.dat
 A['note-open'] = (el) => noteSheet(get(el.dataset.id));
 function noteSheet(n) {
   noteId = n ? n.id : null;
+  if (LB.sheetClosed) { LB.sheetClosed.length = 0; LB.sheetClosed.push(() => { if (noteId) return autoNote(noteId); }); }
   const t = today(), d = n ? noteDay(n) : newNoteDay || t;
   const written = n && n.createdAt && !Number.isNaN(Date.parse(n.createdAt)) ? ymd(new Date(n.createdAt)) : '';
   openSheet({ title: n ? 'Note' : 'New note', body: `<div class="note-when"><label class="note-day"><input type="date" id="note-date" data-note="date" value="${esc(d)}" aria-label="Day this note is for"></label>

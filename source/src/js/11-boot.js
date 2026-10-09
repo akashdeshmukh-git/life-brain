@@ -22,6 +22,7 @@ async function boot() {
   requestPersistence();
   autoSnapshot().catch(() => {});
   registerSW();
+  setTimeout(() => autoRun(), 1500); // only does anything if Automatic is switched on
   LB.ready = true;
   document.documentElement.dataset.ready = '1';
 }

@@ -67,6 +67,8 @@ function mergeSettings(v) {
   if (!Array.isArray(ai.linked)) ai.linked = [];
   const out = { ...d, ...(v || {}), ai };
   if (!['system', 'light', 'dark'].includes(out.theme)) out.theme = 'system';
+  out.auto = { on: false, today: true, overdue: true, notes: true, week: true, plan: true, ...((v && v.auto) || {}) };
+  if (!Array.isArray(out.pending)) out.pending = [];
   if (v && v.look !== 2) { out.look = 2; if (!v.accent || v.accent === 'blue') out.accent = 'clay'; }
   return out;
 }

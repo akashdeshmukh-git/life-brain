@@ -50,6 +50,7 @@ function parseItems(text) {
 }
 
 A['note-organise'] = () => {
+  if (LB.sheetClosed) LB.sheetClosed.length = 0; // you're organising it yourself, so no background run on close
   const n = get(noteId);
   if (!n || !String(n.body || n.title || '').trim()) { toast('Write something in the note first.'); return; }
   const prov = AI.provider();
@@ -132,6 +133,7 @@ A['organise-add'] = async () => {
     else r = { type: 'goal', title: title.slice(0, 120), target: it.target || 1, unit: it.unit.trim(), log: {} };
     made.push(await put(r, { quiet: true }));
   }
+  if (ORG.noteId) await dropPending((p) => p.kind === 'organise' && p.noteId === ORG.noteId);
   closeSheet();
   emit();
   const by = (k) => made.filter((r) => r.type === k).length;

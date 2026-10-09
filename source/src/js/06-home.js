@@ -90,7 +90,7 @@ const briefItem = (it) => `<li><button class="bi-title" ${it.attrs}>${esc(it.tit
 const act = (id, extra = '') => `data-action="${id}" ${extra}`;
 
 function needsAttention(D, t) {
-  const out = [];
+  const out = [...pendingItems()]; // suggestions your AI prepared by itself come first
   const over = D.tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date));
   over.slice(0, 3).forEach((x) => out.push({ title: x.title, attrs: act('task-edit', `data-id="${x.id}"`), text: `Was due ${esc(dueWord(x.date, t))}, still open${(x.moved || 0) >= 2 ? `, moved ${x.moved} times` : ''}.` }));
   if (over.length > 3) out.push({ title: `${over.length - 3} more overdue`, attrs: act('nav', 'data-to="today"'), text: 'On the <u>Today</u> list.' });
@@ -112,7 +112,7 @@ function needsAttention(D, t) {
   // Sunday or Monday: offer the weekly look back, once a week, when the AI is set up.
   const wd = parseYmd(t).getDay(), lb = S.settings.lookBack;
   if ((wd === 0 || wd === 1) && AI.provider() !== 'none' && S.records.size >= 10 && (!lb || lb < addDays(t, -5))) out.push({ title: 'Weekly look back', attrs: act('look-back'), text: 'A short look at what got done and what slipped this week, written by your AI.' });
-  return out.slice(0, 8);
+  return out.slice(0, 10);
 }
 function alreadySorted(D, t) {
   const out = [], y = addDays(t, -1);
@@ -139,7 +139,7 @@ VIEWS.home = () => {
     <div class="brief-top"><div class="brief-in">
       <div class="brief-head">${menuBtn()}<p class="daydate">${esc(dateLine)}</p></div>
       <h1 class="headline">${headline(D, t, sp, shape)}</h1>
-      ${homeLine() ? `<p class="ai-line" id="home-line">${esc(homeLine())} <button class="link" data-action="home-ai" aria-label="Ask again about today">${icon('spark')}</button></p>` : `<button class="link ai-today" data-action="home-ai">${icon('spark')}What matters today?</button>`}
+      ${AUTO.busy ? `<p class="ai-busy" id="ai-busy">${icon('spark')}Your AI is working on ${esc(AUTO.busy)}…</p>` : homeLine() ? `<p class="ai-line" id="home-line">${esc(homeLine())} <button class="link" data-action="home-ai" aria-label="Ask again about today">${icon('spark')}</button></p>` : `<button class="link ai-today" data-action="home-ai">${icon('spark')}What matters today?</button>`}
       ${terrain(sp, shape, t, nowMin, true)}
       <div class="acts">${ACTS.map((a) => `<div class="act${nowMin >= a.to ? ' past' : ''}"><b>${a.label}</b><p>${actSentence(a, sp, D, t, used)}</p></div>`).join('')}</div>
     </div></div>

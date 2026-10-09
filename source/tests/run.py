@@ -57,6 +57,12 @@ class MockAI(BaseHTTPRequestHandler):
                      {'kind': 'event', 'title': 'Dentist sometime'}, {'kind': 'habit', 'title': 'Walk'}, {'kind': 'spell', 'title': 'x'}, {'kind': 'task', 'title': '  '},
                      {'kind': 'task', 'title': '<img src=x onerror="window.__xss4=1">', 'date': 'soon'}]
             return self.reply(200, {'choices': [{'message': {'content': 'Here you go:\n```json\n' + json.dumps({'items': items}) + '\n```'}}]})
+        if kind == 'auto':  # answers by what is being asked, like a real model would
+            sysmsg = body['messages'][0]['content']
+            kind = 'home' if sysmsg.startswith('Write one or two') else 'over' if sysmsg.startswith('Help clear') else 'week' if sysmsg.startswith('Write a short look back') else 'plan7' if sysmsg.startswith('You plan one') else 'plan' if sysmsg.startswith('You turn one') else 'junk'
+        if kind == 'plan':  # reached only from 'auto' (the direct 'plan' mock answers earlier)
+            t = datetime.date.today(); tm = (t + datetime.timedelta(days=1)).isoformat()
+            return self.reply(200, {'choices': [{'message': {'content': json.dumps({'items': [{'kind': 'task', 'title': 'Email the editor', 'date': tm}, {'kind': 'habit', 'title': 'Read daily'}]})}}]})
         if kind in ('break', 'plan7', 'over', 'home', 'week', 'ask'):
             t = datetime.date.today(); d = lambda n: (t + datetime.timedelta(days=n)).isoformat()
             out = {
@@ -109,8 +115,17 @@ def add_task(pg, title, box='#add-today'):
     pg.fill(box, title); pg.press(box, 'Enter'); pg.wait_for_timeout(120)
 def recs(pg, type_): return ev(pg, f"() => all('{type_}')")
 def reload(pg): pg.reload(); pg.wait_for_selector('html[data-ready="1"]', state='attached')
-def ai_setup(pg, kind='ok', key='sk-test-123'):
-    ev(pg, f"""async () => {{ S.aiKeys = {{ openai: '{key}' }}; await saveSettings({{ ai: {{ active: 'openai', linked: ['openai'], baseUrls: {{ openai: '{AI_BASE}/{kind}/v1' }}, models: {{ openai: 'test-model' }}, timeoutSec: 5 }} }}); }}""")
+def ai_setup(pg, kind='ok', key='sk-test-123', keep=False):
+    ev(pg, f"""async () => {{ S.aiKeys = {{ openai: '{key}' }}; await saveSettings({{ ai: {{ active: 'openai', linked: ['openai'], baseUrls: {{ openai: '{AI_BASE}/{kind}/v1' }}, models: {{ openai: 'test-model' }}, timeoutSec: 5, rememberKeys: {'true' if keep else 'false'} }} }}); await storeAiKeys(); }}""")
+def posts(): return [l for l in AI_LOG if l['method'] == 'POST']
+def until(pg, js, timeout=10):
+    end = time.time() + timeout
+    while time.time() < end:
+        if ev(pg, js): return True
+        pg.wait_for_timeout(100)
+    raise AssertionError('timed out waiting for ' + js)
+def auto_wait(pg, timeout=10):
+    pg.wait_for_timeout(150); until(pg, '() => !LB.AUTO.running && !LB.AUTO.busy', timeout); pg.wait_for_timeout(200)
 
 # =====================================================================
 @test('Start', 'Opens on Home: five tabs, no errors, no example data, a calm empty brief')
@@ -535,6 +550,82 @@ def _(pg, ctx):
     for sel, view in [('[data-action=plan-week]', 'today'), ('[data-action=overdue-sort]', 'today'), ('[data-action=look-back]', 'progress'), ('.ai-today', 'home')]:
         go(pg, view); pg.click(sel); pg.wait_for_timeout(150)
         check(ev(pg, '() => LB.route.name') == 'settings', f'{sel} did not go to settings')
+
+@test('Automatic', 'Off by default: opening the app sends nothing, even with a key kept on the phone')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, "async () => { const d = addDays(today(), -2); for (const i of [1,2,3]) await put({type:'task', title:'Late '+i, date:d, done:false}); }")
+    ai_setup(pg, 'auto', keep=True); AI_LOG.clear()
+    reload(pg); pg.wait_for_timeout(2500)
+    check(not posts() and ev(pg, '() => AI.provider()') == 'openai', f'sent {len(posts())} requests while switched off')
+
+@test('Automatic', 'Switched on: a line about today and overdue ideas appear by themselves; applying needs one tap; it runs once a day')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, "async () => { const d = addDays(today(), -3); for (const [i, n] of [['o1','Call bank'],['o2','Book trip'],['o3','Tax forms'],['o4','Old idea']]) await put({id:i, type:'task', title:n, date:d, done:false}); }")
+    ai_setup(pg, 'auto', keep=True); AI_LOG.clear()
+    go(pg, 'settings'); pg.check('[data-action=auto-toggle]'); auto_wait(pg)
+    check(len(posts()) == 2, f'{len(posts())} requests')
+    check('Help clear' in posts()[1]['body']['messages'][0]['content'], 'second request should be the overdue one')
+    check(count(pg, '.auto-parts .check') == 5 and count(pg, '#auto-key-warn') == 0, 'parts and no key warning')
+    check('Last automatic run: ideas for overdue tasks' in pg.inner_text('#auto-card'), pg.inner_text('#auto-card'))
+    check(recs(pg, 'task')[0]['date'] == add_days(pg, -3), 'nothing should change by itself')
+    go(pg, 'home')
+    check('Supervisor call at 11' in pg.inner_text('#home-line'), 'today line')
+    need = pg.inner_text('.blist.need')
+    check('What to do with 4 overdue tasks' in need, need)
+    pg.click('.bi-title:has-text("What to do with")'); pg.wait_for_selector('#rev-list')
+    check('Your AI prepared this' in pg.inner_text('.sheet'), 'says it was prepared earlier')
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(300)
+    check(ev(pg, '() => S.settings.pending.length') == 0 and 'What to do with' not in pg.inner_text('.brief'), 'pending should clear after Apply')
+    check([x for x in recs(pg, 'task') if x['title'] == 'Call bank'][0]['date'] == T(pg), 'applied')
+    AI_LOG.clear(); reload(pg); pg.wait_for_timeout(2500)
+    check(not posts(), 'should not ask again the same day')
+
+@test('Automatic', 'Closing a note organises it in the background; the suggestions wait on Home; unchanged notes are not sent again')
+def _(pg, ctx):
+    open_app(pg, 'notes')
+    ai_setup(pg, 'auto', keep=True)
+    ev(pg, "async () => { await saveSettings({ auto: { ...S.settings.auto, on: true, today: false, overdue: false, week: false, plan: false } }); }")
+    AI_LOG.clear()
+    pg.click('.fab'); pg.fill('#note-title', 'Editor'); pg.fill('#note-body', 'need to email the editor tomorrow about the revision and start reading daily'); pg.wait_for_timeout(100)
+    pg.click('.sheet .btn.primary'); sheet_closed(pg); until(pg, '() => S.settings.pending.length > 0'); pg.wait_for_timeout(100)
+    check(len(posts()) == 1 and posts()[0]['body']['messages'][0]['content'].startswith('You turn one'), f'{len(posts())} requests')
+    check('Suggestions ready from your note' in pg.inner_text('#toast'), 'toast')
+    check(len(recs(pg, 'task')) == 0, 'nothing added by itself')
+    go(pg, 'home')
+    pg.click('.bi-title:has-text("Suggestions from")'); pg.wait_for_selector('#org-list')
+    check(count(pg, '.org-item') == 2, 'two suggestions')
+    pg.click('#org-add'); sheet_closed(pg); pg.wait_for_timeout(300)
+    check([x['title'] for x in recs(pg, 'task')] == ['Email the editor'] and ev(pg, '() => S.settings.pending.length') == 0, 'added and cleared')
+    AI_LOG.clear(); go(pg, 'notes'); pg.click('.note'); pg.wait_for_selector('#note-body'); pg.click('.sheet .btn.primary'); sheet_closed(pg); pg.wait_for_timeout(800)
+    check(not posts(), 'unchanged note should not be sent again')
+
+@test('Automatic', 'On a Monday: weekly look back saved to Notes and a plan for the week waiting to check')
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, "() => { const d = new Date(); const back = (d.getDay() + 6) % 7; d.setDate(d.getDate() - back); d.setHours(9, 0, 0, 0); window.__mon = d.getTime(); LB.now = () => new Date(window.__mon); }")
+    ev(pg, "async () => { for (const [i, n] of [['p1','Write report'],['p2','Read paper'],['p3','Fix plots']]) await put({id:i, type:'task', title:n, date:'', done:false}); await put({type:'task', title:'Done one', date: addDays(today(), -2), done:true, doneDate: addDays(today(), -2)}); await put({type:'note', title:'Why', body:'Changed the prior after new data', date: today()}); }")
+    ai_setup(pg, 'auto', keep=True)
+    ev(pg, "async () => { await saveSettings({ auto: { ...S.settings.auto, on: true, today: false, overdue: false } }); await LB.autoRun(); }"); auto_wait(pg)
+    titles = [n['title'] for n in recs(pg, 'note')]
+    check(any(x.startswith('Look back · ') for x in titles), titles)
+    go(pg, 'home')
+    need = pg.inner_text('.blist.need')
+    check('Your weekly look back is ready' in need and 'A plan for this week' in need, need)
+    pg.click('.bi-title:has-text("A plan for this week")'); pg.wait_for_selector('#rev-list')
+    pg.click('[data-action=pending-dismiss]'); sheet_closed(pg); pg.wait_for_timeout(200)
+    check('A plan for this week' not in pg.inner_text('.brief'), 'Not now should clear it')
+
+@test('Automatic', 'Settings warns when the key is not kept, and shows a failed run plainly')
+def _(pg, ctx):
+    open_app(pg, 'settings')
+    ai_setup(pg, 'auth')
+    pg.check('[data-action=auto-toggle]'); auto_wait(pg); go(pg, 'settings')
+    check(count(pg, '#auto-key-warn') == 1, 'key warning')
+    check('failed' in pg.inner_text('#auto-error') and 'rejected the API key' in pg.inner_text('#auto-error'), pg.inner_text('#auto-card'))
+    pg.click('[data-action=auto-keep-key]'); pg.wait_for_timeout(200)
+    check(ev(pg, '() => S.settings.ai.rememberKeys') and count(pg, '#auto-key-warn') == 0, 'keep key')
 
 @test('AI', 'Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error')
 def _(pg, ctx):

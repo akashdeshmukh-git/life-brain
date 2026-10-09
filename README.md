@@ -30,6 +30,8 @@ Every AI feature is a button. Each one shows exactly what will be sent before it
 - **Ask** (Notes): ask a question and get an answer from your notes, with links to the notes it used.
 - **Ask AI what it sees** (Progress): patterns in your last month.
 
+**Automatic** (Settings, off until you switch it on): the AI does its thinking by itself while the app is open and online. That covers a line about today on your first open each day, ideas for overdue tasks once a day when two or more are overdue, organising a note when you close it, a weekly look back on Sunday or Monday (saved to Notes), and a plan for the week on Mondays. You can switch each one off on its own. Anything that would change your tasks waits on Home as a "✦" item until you open it and tap Apply, or Not now. It sends the same things the buttons send. Settings shows exactly what the last automatic run sent, and any failure. It needs **Keep keys on this phone** on, or it stops when the app closes.
+
 Paste any API key in Settings → AI. The app recognises the service (OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, xAI, DeepSeek, Mistral, Perplexity, Together, Fireworks, Cerebras, Hugging Face, or your own OpenAI-compatible server), checks the key for free and picks a model. Keys stay in memory unless you tick *Keep keys on this phone*. They are never put in backups.
 
 ## Your data
