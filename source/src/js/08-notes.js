@@ -28,8 +28,10 @@ function noteSheet(n) {
       <button type="button" class="chip" data-action="note-day" data-v="${t}">Today</button><button type="button" class="chip" data-action="note-day" data-v="${addDays(t, 1)}">Tomorrow</button></div>
     ${written && written !== d ? `<p class="small">Written ${esc(fmtDate(written, { weekday: 'long', month: 'long', day: 'numeric' }))}</p>` : ''}<input class="note-title" id="note-title" data-note="title" value="${esc(n ? n.title : '')}" placeholder="Title" maxlength="200" aria-label="Title">
     <textarea class="note-body" id="note-body" data-note="body" rows="12" placeholder="Note" aria-label="Note">${esc(n ? n.body : '')}</textarea>
-    <div class="row-end"><button type="button" class="btn" data-action="note-pin" id="note-pin" aria-pressed="${!!(n && n.pinned)}">${icon('pin')}${n && n.pinned ? 'Pinned' : 'Pin'}</button>
-      <button type="button" class="btn danger" data-action="note-delete" ${n ? '' : 'hidden'} id="note-del">Delete</button><span class="spacer"></span><button class="btn primary" data-action="sheet-close">Done</button></div>` });
+    <div class="row-end"><button type="button" class="btn" data-action="note-organise" id="note-organise">${icon('spark')}Organise</button>
+      <button type="button" class="btn icon-only" data-action="note-pin" id="note-pin" aria-pressed="${!!(n && n.pinned)}" aria-label="${n && n.pinned ? 'Unpin' : 'Pin'}">${icon('pin')}</button>
+      <button type="button" class="btn icon-only danger" data-action="note-delete" ${n ? '' : 'hidden'} id="note-del" aria-label="Delete note">${icon('trash')}</button><span class="spacer"></span><button class="btn primary" data-action="sheet-close">Done</button></div>
+    <p class="hint">Organise: the AI turns this note into tasks, events, habits and goals for you to check.</p>` });
 }
 async function saveNote(patch) {
   const old = get(noteId);
@@ -47,7 +49,8 @@ A['note-pin'] = async (el) => {
   if (!old) { await saveNote({ title: $('#note-title').value || 'Untitled', body: $('#note-body').value, pinned }); }
   else await put({ ...old, pinned }, { quiet: true });
   el.setAttribute('aria-pressed', pinned);
-  el.innerHTML = icon('pin') + (pinned ? 'Pinned' : 'Pin');
+  el.setAttribute('aria-label', pinned ? 'Unpin' : 'Pin');
+  toast(pinned ? 'Pinned' : 'Unpinned');
 };
 A['note-day'] = async (el) => {
   const f = $('#note-date');

@@ -1,6 +1,6 @@
 """Life Brain test suite (Playwright, Chromium). Run: python3 tests/run.py [filter]
 Serves dist/pwa on :8765 and a mock AI service on :8799."""
-import json, os, sys, threading, time, traceback
+import json, os, sys, threading, time, traceback, datetime
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler, BaseHTTPRequestHandler
 from functools import partial
 from playwright.sync_api import sync_playwright
@@ -50,6 +50,15 @@ class MockAI(BaseHTTPRequestHandler):
         kind = self.path.split('/')[1]
         if kind == 'anthropic': return self.reply(200, {'content': [{'type': 'text', 'text': 'Anthropic says **hi**'}]})
         if kind == 'gemini': return self.reply(200, {'candidates': [{'content': {'parts': [{'text': 'Gemini says hi'}]}, 'finishReason': 'STOP'}]})
+        if kind == 'plan':
+            t = datetime.date.today(); tm = (t + datetime.timedelta(days=1)).isoformat()
+            items = [{'kind': 'task', 'title': 'Finish chapter 3', 'date': tm}, {'kind': 'event', 'title': 'Supervisor call', 'date': tm, 'time': '11:00', 'end': '11:30'},
+                     {'kind': 'habit', 'title': 'Gym (Mon/Wed/Fri)'}, {'kind': 'goal', 'title': 'Read books', 'target': 12, 'unit': 'books'},
+                     {'kind': 'event', 'title': 'Dentist sometime'}, {'kind': 'habit', 'title': 'Walk'}, {'kind': 'spell', 'title': 'x'}, {'kind': 'task', 'title': '  '},
+                     {'kind': 'task', 'title': '<img src=x onerror="window.__xss4=1">', 'date': 'soon'}]
+            return self.reply(200, {'choices': [{'message': {'content': 'Here you go:\n```json\n' + json.dumps({'items': items}) + '\n```'}}]})
+        if kind == 'junk':
+            return self.reply(200, {'choices': [{'message': {'content': 'Sure! I organised it nicely for you.'}}]})
         if kind in ('ok', 'openrouter'):
             return self.reply(200, {'choices': [{'message': {'content': '**H1** looks strongest.\n- Try planning to 80%\n<script>window.__xss2=1</script><img src=x onerror="window.__xss3=1">'}}]})
         if kind == 'fail': return self.reply(500, {'error': {'message': 'boom'}})
@@ -359,6 +368,52 @@ def _(pg, ctx):
     check(count(pg, '#ai-answer strong') >= 1, 'markdown not rendered')
     pg.click('#ai-save'); pg.wait_for_timeout(200)
     check(any(n['title'].startswith('AI:') for n in recs(pg, 'note')), 'not saved as note')
+
+@test('AI', 'Organise a note: the AI suggests tasks, events, habits and goals; you check them; Add puts each where it belongs; Undo takes them back')
+def _(pg, ctx):
+    open_app(pg, 'notes')
+    ev(pg, "() => put({type:'habit', title:'Walk', log:{}})")
+    ai_setup(pg, 'plan')
+    pg.click('.fab'); pg.fill('#note-title', 'Brain dump'); pg.fill('#note-body', 'finish ch3 tmrw, call supervisor tomorrow 11, gym mon wed fri, read 12 books, walk')
+    pg.click('#note-organise'); pg.wait_for_selector('#org-preview', state='attached')
+    prev = pg.eval_on_selector('#org-preview', 'e => e.textContent')
+    check('gym mon wed fri' in prev and 'Habits: Walk' in prev and 'Reply with JSON only' in prev, 'preview')
+    AI_LOG.clear()
+    pg.click('#org-send'); pg.wait_for_selector('#org-list, #org-error', timeout=10000)
+    check(count(pg, '#org-list') == 1, pg.inner_text('#org-result'))
+    sent = [l for l in AI_LOG if l['method'] == 'POST'][0]['body']['messages']
+    check(sent[0]['content'].startswith('You turn one person') and sent[1]['content'] in prev, 'request differs from preview')
+    rows = pg.locator('.org-item')
+    check(rows.count() == 7, f'{rows.count()} rows: junk kinds and empty titles must be dropped')
+    kinds = pg.eval_on_selector_all('.org-item select', 'els => els.map(e => e.value)')
+    check(kinds == ['task', 'event', 'habit', 'goal', 'task', 'habit', 'task'], kinds)
+    check(not pg.is_checked('.org-item:nth-child(6) .org-on') and 'Already in your app' in rows.nth(5).inner_text(), 'duplicate Walk should start unticked')
+    check(not ev(pg, '() => window.__xss4'), 'markup ran')
+    pg.uncheck('.org-item:nth-child(7) .org-on')
+    pg.select_option('.org-item:nth-child(5) select', 'habit'); pg.wait_for_timeout(100)
+    pg.fill('.org-item:nth-child(1) .org-title', 'Finish chapter 3 draft')
+    check(pg.inner_text('#org-add') == 'Add 5', pg.inner_text('#org-add'))
+    pg.click('#org-add'); sheet_closed(pg); pg.wait_for_timeout(200)
+    tasks, evs, habits, goals = recs(pg, 'task'), recs(pg, 'event'), recs(pg, 'habit'), recs(pg, 'goal')
+    check([t['title'] for t in tasks] == ['Finish chapter 3 draft'] and tasks[0]['date'] == add_days(pg, 1) and 'Brain dump' in tasks[0]['note'], tasks)
+    check(len(evs) == 1 and evs[0]['time'] == '11:00' and evs[0]['end'] == '11:30' and evs[0]['date'] == add_days(pg, 1), evs)
+    check(sorted(h['title'] for h in habits) == ['Dentist sometime', 'Gym (Mon/Wed/Fri)', 'Walk'], habits)
+    check(len(goals) == 1 and goals[0]['target'] == 12 and goals[0]['unit'] == 'books', goals)
+    check('Added 1 task, 1 event, 2 habits and 1 goal' in pg.inner_text('#toast'), pg.inner_text('#toast'))
+    check(len(recs(pg, 'note')) == 1, 'the note itself stays')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check(len(recs(pg, 'task')) == 0 and len(recs(pg, 'event')) == 0 and len(recs(pg, 'habit')) == 1 and len(recs(pg, 'goal')) == 0, 'undo')
+
+@test('AI', 'Organise: an answer that is not a list gives a plain error; no key sends you to Settings')
+def _(pg, ctx):
+    open_app(pg, 'notes')
+    pg.click('.fab'); pg.fill('#note-body', 'stuff to do'); pg.click('#note-organise'); pg.wait_for_timeout(300)
+    check(ev(pg, '() => LB.route.name') == 'settings', 'no key should go to settings')
+    ai_setup(pg, 'junk'); go(pg, 'notes')
+    pg.click('.note'); pg.click('#note-organise'); pg.click('#org-send'); pg.wait_for_selector('#org-error', timeout=10000)
+    check('not in a form the app can read' in pg.inner_text('#org-error'), pg.inner_text('#org-error'))
+    pg.click('[data-action=note-back]'); pg.wait_for_selector('#note-body')
+    check(pg.input_value('#note-body') == 'stuff to do', 'Back returns to the note')
 
 @test('AI', 'Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error')
 def _(pg, ctx):
