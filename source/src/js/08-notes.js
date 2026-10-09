@@ -8,7 +8,7 @@ VIEWS.notes = () => {
   const pinned = notes.filter((n) => n.pinned), rest = notes.filter((n) => !n.pinned);
   const card = (n) => `<button class="note" data-action="note-open" data-id="${n.id}">${n.title ? `<b>${esc(n.title)}</b>` : ''}<span>${esc(trunc(String(n.body || ''), 260))}</span><small class="note-date">${esc(relDate(noteDay(n)))}</small></button>`;
   return header('Notes', '', '')
-    + `<label class="search">${icon('search')}<input id="notes-q" type="search" placeholder="Search notes" value="${esc(notesUI.q)}" data-live="notes-q" autocomplete="off" aria-label="Search notes"></label>`
+    + `<div class="search-row"><label class="search">${icon('search')}<input id="notes-q" type="search" placeholder="Search notes" value="${esc(notesUI.q)}" data-live="notes-q" autocomplete="off" aria-label="Search notes"></label><button class="btn ai-ask" data-action="notes-ask">${icon('spark')}Ask</button></div>`
     + (pinned.length ? `<p class="mini-label">Pinned</p><div class="notes">${pinned.map(card).join('')}</div>${rest.length ? '<p class="mini-label">Others</p>' : ''}` : '')
     + (rest.length ? `<div class="notes">${rest.map(card).join('')}</div>` : '')
     + (!notes.length ? `<p class="empty">${q ? 'No notes match.' : 'No notes yet. Tap + to write one.'}</p>` : '')

@@ -109,6 +109,9 @@ function needsAttention(D, t) {
   // Everything lives only on this phone, so a backup file is the one safety net against a cleared browser.
   const n = S.records.size, last = S.lastExport ? daysBetween(S.lastExport.slice(0, 10), t) : null;
   if (n >= 15 && (last == null || last >= 30)) out.push({ title: 'Save a backup file', attrs: act('nav', 'data-to="settings"'), text: `Everything lives only on this phone. ${last == null ? 'No backup file has been saved yet' : `The last backup file was saved ${last} days ago`}; one is a tap away in <u>Settings</u>.` });
+  // Sunday or Monday: offer the weekly look back, once a week, when the AI is set up.
+  const wd = parseYmd(t).getDay(), lb = S.settings.lookBack;
+  if ((wd === 0 || wd === 1) && AI.provider() !== 'none' && S.records.size >= 10 && (!lb || lb < addDays(t, -5))) out.push({ title: 'Weekly look back', attrs: act('look-back'), text: 'A short look at what got done and what slipped this week, written by your AI.' });
   return out.slice(0, 8);
 }
 function alreadySorted(D, t) {
@@ -136,6 +139,7 @@ VIEWS.home = () => {
     <div class="brief-top"><div class="brief-in">
       <div class="brief-head"><p class="daydate">${esc(dateLine)}</p><button class="icon-btn" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div>
       <h1 class="headline">${headline(D, t, sp, shape)}</h1>
+      ${homeLine() ? `<p class="ai-line" id="home-line">${esc(homeLine())} <button class="link" data-action="home-ai" aria-label="Ask again about today">${icon('spark')}</button></p>` : `<button class="link ai-today" data-action="home-ai">${icon('spark')}What matters today?</button>`}
       ${terrain(sp, shape, t, nowMin, true)}
       <div class="acts">${ACTS.map((a) => `<div class="act${nowMin >= a.to ? ' past' : ''}"><b>${a.label}</b><p>${actSentence(a, sp, D, t, used)}</p></div>`).join('')}</div>
     </div></div>

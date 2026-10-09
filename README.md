@@ -17,6 +17,17 @@ Settings (the gear) has your name, the theme (Auto, Light, Dark), the accent col
 
 ## AI
 
+Every AI feature is a button. Each one shows exactly what will be sent before it sends, and anything it suggests changing is listed with tick boxes, so nothing changes until you check it. One Undo reverses the lot.
+
+- **Organise** (in a note): turns a brain dump into tasks, events, habits and goals.
+- **Break down** (in a task): 3 to 6 small steps with dates, never past the task's due date. It can replace the big task.
+- **Plan week** (top of Today): spreads open tasks over the next 7 days, sized to how many you actually finish a day.
+- **Sort out** (next to overdue tasks on Today): do today, move, split or delete, for each one.
+- **What matters today?** (Home): one sentence about today under the headline, kept until midnight.
+- **Weekly look back** (Progress, and on Home on Sundays and Mondays): done, slipped, one thing to try. Save it as a note.
+- **Ask** (Notes): ask a question and get an answer from your notes, with links to the notes it used.
+- **Ask AI what it sees** (Progress): patterns in your last month.
+
 Paste any API key in Settings → AI. The app recognises the service (OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, xAI, DeepSeek, Mistral, Perplexity, Together, Fireworks, Cerebras, Hugging Face, or your own OpenAI-compatible server), checks the key for free and picks a model. Keys stay in memory unless you tick *Keep keys on this phone*. They are never put in backups.
 
 ## Your data

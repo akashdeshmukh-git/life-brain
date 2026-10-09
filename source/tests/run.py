@@ -57,6 +57,17 @@ class MockAI(BaseHTTPRequestHandler):
                      {'kind': 'event', 'title': 'Dentist sometime'}, {'kind': 'habit', 'title': 'Walk'}, {'kind': 'spell', 'title': 'x'}, {'kind': 'task', 'title': '  '},
                      {'kind': 'task', 'title': '<img src=x onerror="window.__xss4=1">', 'date': 'soon'}]
             return self.reply(200, {'choices': [{'message': {'content': 'Here you go:\n```json\n' + json.dumps({'items': items}) + '\n```'}}]})
+        if kind in ('break', 'plan7', 'over', 'home', 'week', 'ask'):
+            t = datetime.date.today(); d = lambda n: (t + datetime.timedelta(days=n)).isoformat()
+            out = {
+                'break': json.dumps({'steps': [{'title': 'Outline sections', 'date': d(0)}, {'title': 'Write intro', 'date': d(1)}, {'title': 'Draft results', 'date': '2099-01-01'}, {'title': ''}]}),
+                'plan7': json.dumps({'plan': [{'id': 'p1', 'date': d(1)}, {'id': 'p2', 'date': ''}, {'id': 'zzz', 'date': d(1)}, {'id': 'p3', 'date': '2099-01-01'}, {'id': 'p1', 'date': d(2)}], 'note': 'A light week with room on Sunday.'}),
+                'over': json.dumps({'actions': [{'id': 'o1', 'action': 'today'}, {'id': 'o2', 'action': 'move', 'date': d(3)}, {'id': 'o3', 'action': 'split', 'steps': ['Find the form', 'Fill page 1']}, {'id': 'o4', 'action': 'drop', 'why': 'Moved 6 times, no longer needed'}, {'id': 'o5', 'action': 'explode'}]}),
+                'home': '**Supervisor call** at 11 is the one fixed point today.',
+                'week': '**Done**\n- Chapter 3\n**Slipped**\n- Tax forms\n**One thing to try next week**\n- Smaller tasks',
+                'ask': 'You changed the prior because of the new data [1]. See also [9].',
+            }[kind]
+            return self.reply(200, {'choices': [{'message': {'content': out}}]})
         if kind == 'junk':
             return self.reply(200, {'choices': [{'message': {'content': 'Sure! I organised it nicely for you.'}}]})
         if kind in ('ok', 'openrouter'):
@@ -414,6 +425,86 @@ def _(pg, ctx):
     check('not in a form the app can read' in pg.inner_text('#org-error'), pg.inner_text('#org-error'))
     pg.click('[data-action=note-back]'); pg.wait_for_selector('#note-body')
     check(pg.input_value('#note-body') == 'stuff to do', 'Back returns to the note')
+
+@test('AI tools', 'Break down: steps added with dates (never after the due date), the big task replaced, Undo restores it')
+def _(pg, ctx):
+    open_app(pg)
+    ev(pg, "() => put({id:'big', type:'task', title:'Finish chapter 3', date: addDays(today(), 2), done:false, moved:3, note:''})"); ai_setup(pg, 'break'); pg.wait_for_timeout(100)
+    ev(pg, "() => A['task-edit']({ dataset: { id: 'big' } })"); pg.click('[data-action=task-break]'); pg.wait_for_selector('#tool-preview', state='attached')
+    check('Task: Finish chapter 3' in pg.eval_on_selector('#tool-preview', 'e => e.textContent'), 'preview')
+    pg.click('#tool-send'); pg.wait_for_selector('#rev-list, #tool-error', timeout=10000)
+    check(count(pg, '#rev-list .org-item') == 4, f"{count(pg, '#rev-list .org-item')} rows")
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(200)
+    ts = sorted(recs(pg, 'task'), key=lambda x: x['title'])
+    check([x['title'] for x in ts] == ['Draft results', 'Outline sections', 'Write intro'], ts)
+    check([x for x in ts if x['title'] == 'Draft results'][0]['date'] == add_days(pg, 2), 'step after the due date should be pulled back')
+    check(all('Finish chapter 3' in x['note'] for x in ts), 'steps should say where they came from')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check([x['title'] for x in recs(pg, 'task')] == ['Finish chapter 3'], 'undo')
+
+@test('AI tools', 'Plan my week: only real, open tasks move, within the next 7 days; the note shows; Undo puts dates back')
+def _(pg, ctx):
+    open_app(pg)
+    ev(pg, """async () => { const t = today(); await put({id:'p1', type:'task', title:'Write report', date:'', done:false}); await put({id:'p2', type:'task', title:'Read paper', date:'', done:false});
+      await put({id:'p3', type:'task', title:'Fix plots', date:t, done:false}); }"""); ai_setup(pg, 'plan7'); pg.wait_for_timeout(100)
+    pg.click('[data-action=plan-week]'); pg.click('#tool-send'); pg.wait_for_selector('#rev-list', timeout=10000)
+    check(count(pg, '#rev-list .org-item') == 2 and 'light week' in pg.inner_text('#plan-note'), pg.inner_text('#tool-result'))
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(200)
+    by = {x['id']: x['date'] for x in recs(pg, 'task')}
+    check(by == {'p1': add_days(pg, 1), 'p2': '', 'p3': ''}, by)
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check({x['id']: x['date'] for x in recs(pg, 'task')}['p3'] == T(pg), 'undo')
+
+@test('AI tools', 'Sort out overdue: do today, move, split and delete each work; unknown actions are left alone')
+def _(pg, ctx):
+    open_app(pg)
+    ev(pg, """async () => { const d = addDays(today(), -3); for (const [i, n] of [['o1','Call bank'],['o2','Book trip'],['o3','Tax forms'],['o4','Old idea'],['o5','Mystery']]) await put({id:i, type:'task', title:n, date:d, done:false, moved: i === 'o4' ? 6 : 0}); }"""); ai_setup(pg, 'over'); pg.wait_for_timeout(100)
+    pg.click('[data-action=overdue-sort]'); pg.click('#tool-send'); pg.wait_for_selector('#rev-list', timeout=10000)
+    check(count(pg, '#rev-list .org-item') == 5 and not pg.is_checked('#rev-list .org-item:nth-child(5) .org-on'), 'unknown action should start unticked')
+    check(pg.input_value('#rev-list .org-item:nth-child(3) textarea') == 'Find the form\nFill page 1', 'split steps editable')
+    pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(300)
+    by = {x['title']: x for x in recs(pg, 'task')}
+    check(by['Call bank']['date'] == T(pg) and by['Book trip']['date'] == add_days(pg, 3), 'today/move')
+    check('Tax forms' not in by and 'Find the form' in by and 'Fill page 1' in by and 'Old idea' not in by, sorted(by))
+    check(by['Mystery']['date'] == add_days(pg, -3), 'left alone')
+    pg.click('#toast-action'); pg.wait_for_timeout(300)
+    check(sorted(x['title'] for x in recs(pg, 'task')) == ['Book trip', 'Call bank', 'Mystery', 'Old idea', 'Tax forms'], 'undo restores all')
+
+@test('AI tools', 'Home line: one sentence about today, kept until tomorrow; Weekly look back saves as a note')
+def _(pg, ctx):
+    open_app(pg, '')
+    ai_setup(pg, 'home'); go(pg, 'home')
+    pg.click('.ai-today'); pg.click('#tool-send'); pg.wait_for_selector('#home-line', timeout=10000)
+    check(pg.inner_text('#home-line').startswith('Supervisor call at 11 is the one fixed point today.'), pg.inner_text('#home-line'))
+    reload(pg); check(count(pg, '#home-line') == 1, 'line should stay today')
+    ev(pg, "async () => { await saveSettings({ homeLine: { date: addDays(today(), -1), text: 'old' } }); }"); go(pg, 'progress'); go(pg, 'home')
+    check(count(pg, '#home-line') == 0, "yesterday's line should be gone")
+    ai_setup(pg, 'week'); go(pg, 'progress')
+    pg.click('[data-action=look-back]'); pg.click('#tool-send'); pg.wait_for_selector('#tool-answer', timeout=10000)
+    check(count(pg, '#tool-answer strong') == 3, 'three bold parts')
+    pg.click('#tool-save'); pg.wait_for_timeout(200)
+    check(any(n['title'].startswith('Look back') for n in recs(pg, 'note')), 'not saved')
+
+@test('AI tools', 'Ask your notes: needs a question, sends numbered notes, answer links to the notes it used')
+def _(pg, ctx):
+    open_app(pg, 'notes')
+    ev(pg, "async () => { await put({id:'n1', type:'note', title:'Prior change', body:'Switched to a wider prior after the new data.', date: today()}); }"); ai_setup(pg, 'ask'); pg.wait_for_timeout(100)
+    go(pg, 'notes'); pg.click('[data-action=notes-ask]'); pg.click('#tool-send'); pg.wait_for_timeout(200)
+    check('Type a question first' in pg.inner_text('#tool-error'), 'should ask for a question')
+    pg.fill('#ask-q', 'Why did I change the prior?'); pg.wait_for_timeout(50)
+    check('[1]' in pg.eval_on_selector('#tool-preview', 'e => e.textContent') and 'Why did I change the prior?' in pg.eval_on_selector('#tool-preview', 'e => e.textContent'), 'preview')
+    pg.click('#tool-send'); pg.wait_for_selector('#tool-answer', timeout=10000)
+    check(count(pg, '#tool-answer .cite') == 1 and '[9]' in pg.inner_text('#tool-answer'), 'only real note numbers become links')
+    pg.click('#tool-answer .cite'); pg.wait_for_selector('#note-title')
+    check(pg.input_value('#note-title') == 'Prior change', 'link opens the note')
+
+@test('AI tools', 'Every AI button without a key goes to Settings instead of failing')
+def _(pg, ctx):
+    open_app(pg)
+    ev(pg, "() => put({id:'x1', type:'task', title:'T', date: addDays(today(), -1), done:false})"); pg.wait_for_timeout(100)
+    for sel, view in [('[data-action=plan-week]', 'today'), ('[data-action=overdue-sort]', 'today'), ('[data-action=look-back]', 'progress'), ('.ai-today', 'home')]:
+        go(pg, view); pg.click(sel); pg.wait_for_timeout(150)
+        check(ev(pg, '() => LB.route.name') == 'settings', f'{sel} did not go to settings')
 
 @test('AI', 'Without a key, Ask AI goes to Settings → AI; a bad key shows a plain error')
 def _(pg, ctx):
