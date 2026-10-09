@@ -1,6 +1,6 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **27 of 27 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **28 of 28 PASSED**.
 
 AI calls were tested against a local mock service. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them).
 
@@ -30,6 +30,7 @@ AI calls were tested against a local mock service. Real AI services: NOT TESTED 
 | Data | First start brings over data from the earlier Life Brain once, skipping examples, and leaves the old data untouched | PASSED |
 | Data | Delete everything needs DELETE typed, then clears all | PASSED |
 | Look | Dark is true black; theme and colour switch from Settings and persist | PASSED |
+| Look | Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once | PASSED |
 | Look | Fits a small phone (360px) on every screen with no sideways scrolling; uses Inter | PASSED |
 | Offline | Installs a service worker and opens with no network | PASSED |
 | Safety | Titles with HTML are shown as text, not run | PASSED |
