@@ -14,6 +14,7 @@ async function boot() {
   onChange(() => render(false));
   render(false);
   if (moved) toast(`Brought over ${plural(moved, 'item')} from the old version`);
+  if (!S.settings.introSeen && !window.LB_NO_INTRO) { A.intro(); saveSettings({ introSeen: true }).catch(() => {}); } // once, so nobody starts lost
   window.addEventListener('hashchange', () => { const r = parseHash(); if (r.name !== route.name || r.sub !== route.sub) { Object.assign(route, r); render(true); } });
   /* Past midnight, "today" changes: redraw when the app comes back. */
   let day = today();

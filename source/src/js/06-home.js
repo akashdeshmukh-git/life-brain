@@ -137,7 +137,7 @@ VIEWS.home = () => {
   const list = (title, items, cls) => items.length ? `<section class="blist ${cls}"><h2>${title}</h2><ol>${items.map(briefItem).join('')}</ol></section>` : '';
   return `<div class="brief">
     <div class="brief-top"><div class="brief-in">
-      <div class="brief-head"><p class="daydate">${esc(dateLine)}</p><button class="icon-btn" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div>
+      <div class="brief-head">${menuBtn()}<p class="daydate">${esc(dateLine)}</p></div>
       <h1 class="headline">${headline(D, t, sp, shape)}</h1>
       ${homeLine() ? `<p class="ai-line" id="home-line">${esc(homeLine())} <button class="link" data-action="home-ai" aria-label="Ask again about today">${icon('spark')}</button></p>` : `<button class="link ai-today" data-action="home-ai">${icon('spark')}What matters today?</button>`}
       ${terrain(sp, shape, t, nowMin, true)}

@@ -21,12 +21,13 @@ function applyTheme() {
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (_) {}
 
 /* ---- Screens ---- */
+/* Every screen, with one line saying what it is for, so the menu doubles as a map of the app. */
 const TABS = [
-  { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'today', label: 'Today', icon: 'today' },
-  { id: 'calendar', label: 'Calendar', icon: 'calendar' },
-  { id: 'notes', label: 'Notes', icon: 'notes' },
-  { id: 'progress', label: 'Progress', icon: 'progress' },
+  { id: 'home', label: 'Home', icon: 'home', hint: 'Your day at a glance' },
+  { id: 'today', label: 'Today', icon: 'today', hint: 'Tasks to do and habits to tick' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar', hint: 'Your month, day by day' },
+  { id: 'notes', label: 'Notes', icon: 'notes', hint: 'Why things happened, and brain dumps' },
+  { id: 'progress', label: 'Progress', icon: 'progress', hint: 'Habits, goals and patterns' },
 ];
 const VIEWS = {};
 const route = { name: 'home', sub: '' };
@@ -45,13 +46,36 @@ function go(name, sub = '') {
   render(true);
 }
 LB.go = go;
+/* ---- The menu: a drawer from the left, opened with ☰ or a swipe from the left edge. Settings is last. ---- */
+const navItem = (n, cur) => `<button class="nav-item" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}><span class="nav-ic">${icon(n.icon)}</span><span class="nav-text"><b>${n.label}</b><small>${n.hint}</small></span></button>`;
 function renderNav() {
-  const cur = route.name === 'settings' ? '' : route.name;
-  $('#tabbar').innerHTML = TABS.map((n) => `<button class="tab" data-action="nav" data-to="${n.id}" ${n.id === cur ? 'aria-current="page"' : ''}><span class="tab-ic">${icon(n.icon)}</span><span>${n.label}</span></button>`).join('');
+  const cur = route.name;
+  $('#drawer').innerHTML = `<div class="drawer-scrim" data-action="menu-close"></div>
+    <nav class="drawer-panel" aria-label="Menu" tabindex="-1"><div class="drawer-brand"><img src="${LB.LOGO}" alt="" width="36" height="36"><span>Life Brain</span></div>
+      <div class="drawer-list">${TABS.map((n) => navItem(n, cur)).join('')}</div>
+      <div class="drawer-foot"><button class="nav-item" data-action="intro"><span class="nav-ic">${icon('help')}</span><span class="nav-text"><b>How it works</b></span></button>
+        ${navItem({ id: 'settings', label: 'Settings', icon: 'gear', hint: 'Look, AI key, backups' }, cur)}</div></nav>`;
+  $('#drawer').setAttribute('aria-hidden', String(!document.documentElement.classList.contains('menu-open')));
 }
-/* The top of every screen: big title, a small line under it, settings on the right. */
-const header = (title, sub = '', right = '') => `<header class="top"><div class="top-text"><h1>${esc(title)}</h1>${sub ? `<p class="top-sub">${sub}</p>` : ''}</div>
-  <div class="top-right">${right}<button class="icon-btn" data-action="nav" data-to="settings" aria-label="Settings">${icon('gear')}</button></div></header>`;
+let menuFocus = null;
+function openMenu() {
+  menuFocus = document.activeElement;
+  document.documentElement.classList.add('menu-open');
+  $('#drawer').setAttribute('aria-hidden', 'false');
+  const first = $('.drawer-panel [aria-current="page"]') || $('.drawer-panel .nav-item');
+  if (first) first.focus({ preventScroll: true });
+}
+function closeMenu() {
+  if (!document.documentElement.classList.contains('menu-open')) return;
+  document.documentElement.classList.remove('menu-open');
+  $('#drawer').setAttribute('aria-hidden', 'true');
+  if (menuFocus && document.contains(menuFocus)) menuFocus.focus({ preventScroll: true });
+}
+LB.openMenu = openMenu;
+const menuBtn = () => `<button class="icon-btn menu-btn" data-action="menu" aria-label="Open menu">${icon('menu')}</button>`;
+/* The top of every screen: menu on the left, big title, a small line under it, the screen's own buttons on the right. */
+const header = (title, sub = '', right = '') => `<header class="top">${menuBtn()}<div class="top-text"><h1>${esc(title)}</h1>${sub ? `<p class="top-sub">${sub}</p>` : ''}</div>
+  ${right ? `<div class="top-right">${right}</div>` : ''}</header>`;
 let lastKey = '';
 function render(focus) {
   applyTheme();
@@ -101,7 +125,7 @@ document.addEventListener('submit', (ev) => {
     if (errEl) errEl.textContent = e.message || 'Could not save.'; else toast(e.message || 'Could not save.', 'bad');
   });
 });
-A.nav = (el) => { closeSheet(); go(el.dataset.to, el.dataset.sub || ''); };
+A.nav = (el) => { closeSheet(); closeMenu(); go(el.dataset.to, el.dataset.sub || ''); };
 A['sheet-close'] = () => closeSheet();
 
 /* ---- Toast, with an optional Undo ---- */
@@ -306,3 +330,32 @@ function confirmSheet({ title, text, confirmLabel = 'Confirm', danger = false, r
   });
 }
 F.confirm = () => {};
+
+document.addEventListener('keydown', (ev) => {
+  if (!document.documentElement.classList.contains('menu-open')) return;
+  if (ev.key === 'Escape') { closeMenu(); return; }
+  if (ev.key !== 'Tab') return; // keep focus inside the open menu
+  const f = $$('.drawer-panel button');
+  if (!f.length) return;
+  if (ev.shiftKey && document.activeElement === f[0]) { f[f.length - 1].focus(); ev.preventDefault(); }
+  else if (!ev.shiftKey && document.activeElement === f[f.length - 1]) { f[0].focus(); ev.preventDefault(); }
+});
+(() => {
+  let x0 = null, y0 = null, from = '';
+  document.addEventListener('touchstart', (e) => {
+    const t = e.touches[0], open = document.documentElement.classList.contains('menu-open');
+    from = open ? 'menu' : t.clientX < 24 && !SH.open ? 'edge' : '';
+    x0 = from ? t.clientX : null; y0 = t.clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (x0 == null) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dy) > Math.abs(dx)) return;
+    if (from === 'edge' && dx > 50) openMenu();
+    if (from === 'menu' && dx < -50) closeMenu();
+  }, { passive: true });
+})();
+
+A.menu = () => openMenu();
+A['menu-close'] = () => closeMenu();
