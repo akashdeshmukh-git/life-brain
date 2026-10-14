@@ -195,7 +195,7 @@ A.intro = () => {
       ${row('notes', 'Notes', 'Write down the why. Tap Organise to turn a brain dump into tasks.')}
       ${row('progress', 'Progress', 'Your week in numbers, habits to keep, and what you might be missing.')}
     </ul>
-    <p class="small mt-3">Everything is in the menu <b>☰</b> at the top left, and <b>+</b> adds anything from anywhere. Buttons with the colourful ✦ use your AI. Nothing changes until you tap, and Undo takes it back.</p>
+    <p class="small mt-3">Everything is in the menu <b>☰</b> at the top left, and <b>+</b> adds anything from anywhere. With an AI key, <b>Auto</b> in + lets your AI decide what you typed is. Buttons with the colourful ✦ use your AI. Nothing changes until you tap, and Undo takes it back.</p>
     <div class="sheet-foot justify-end"><button class="btn primary" data-action="intro-done">Got it</button></div>` });
 };
 A['intro-done'] = async () => { closeSheet(); if (!S.settings.introSeen) await saveSettings({ introSeen: true }); };

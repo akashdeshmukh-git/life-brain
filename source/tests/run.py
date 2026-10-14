@@ -84,6 +84,18 @@ class MockAI(BaseHTTPRequestHandler):
             tasks = [l.split(' | ')[:2] for l in rest.splitlines() if ' | ' in l]
             links = [{'task': i, 'goal': goal if 'paper' in n.lower() else ''} for i, n in tasks] + [{'task': 'nope', 'goal': goal}, {'task': tasks[0][0] if tasks else '', 'goal': 'bogus'}]
             return self.reply(200, {'choices': [{'message': {'content': json.dumps({'links': links})}}]})
+        if kind == 'omni':  # the + box with Auto: one item, sorted by what the text says, like a model would
+            raw = body['messages'][-1]['content'].split('Input:\n', 1)[-1].strip().lower(); t = datetime.date.today(); d = lambda n: (t + datetime.timedelta(days=n)).isoformat()
+            meta = {'dueDate': None, 'frequency': None, 'targetDeadline': None}
+            if 'gym' in raw: out = {'determinedType': 'habit', 'title': 'Gym every morning', 'extractedMeta': {**meta, 'frequency': 'daily'}, 'summaryForNotes': None}
+            elif 'swim' in raw: out = {'determinedType': 'habit', 'title': 'Swim', 'extractedMeta': {**meta, 'frequency': 'weekly'}, 'summaryForNotes': None}
+            elif 'dentist' in raw: out = {'determinedType': 'calendar', 'title': 'Dentist', 'extractedMeta': {**meta, 'dueDate': d(2)}, 'summaryForNotes': None}
+            elif 'books' in raw: out = {'determinedType': 'goal', 'title': 'Read 12 books', 'extractedMeta': {**meta, 'targetDeadline': f'December 31, {t.year}'}, 'summaryForNotes': None}
+            elif 'idea' in raw: out = {'determinedType': 'note', 'title': 'Fractal voids idea', 'extractedMeta': meta, 'summaryForNotes': 'Idea: compare the fractal dimension of voids with simulations.'}
+            elif 'junk' in raw: out = {'determinedType': 'spaceship', 'title': 'x'}
+            else: out = {'determinedType': 'task', 'title': raw[:1].upper() + raw[1:], 'extractedMeta': {**meta, 'dueDate': d(1)}, 'summaryForNotes': None}
+            text = json.dumps(out)
+            return self.reply(200, {'choices': [{'message': {'content': '```json\n' + text + '\n```' if 'dentist' in raw else text}}]})
         if kind == 'junk':
             return self.reply(200, {'choices': [{'message': {'content': 'Sure! I organised it nicely for you.'}}]})
         if kind in ('ok', 'openrouter'):
@@ -1000,6 +1012,41 @@ def _(pg, ctx):
     check(ev(pg, "() => get('b').date") == T(pg), 'undo')
     go(pg, 'calendar'); ev(pg, swipe, ['.legend .dot.task', 120]); pg.wait_for_timeout(300)  # a calendar dot is not a task row
     check(ev(pg, "() => get('a').date") == T(pg) and not ev(pg, "() => get('a').done"), 'nothing changed')
+
+@test('AI', 'The + box with AI: Auto comes first; raw text becomes a task, event, habit, goal or note, added at once with Undo; an unusable answer keeps your text')
+def _(pg, ctx):
+    open_app(pg, '')
+    ai_setup(pg, 'omni'); pg.wait_for_timeout(150)
+    def omni(text):
+        pg.click('.fab'); pg.wait_for_selector('#qa-title')
+        check(pg.is_checked('.sheet input[name=kind][value=auto]'), 'Auto should be picked first when an AI is set up')
+        pg.fill('#qa-title', text); pg.press('#qa-title', 'Enter'); sheet_closed(pg); pg.wait_for_timeout(150)
+    AI_LOG.clear(); omni('call the bank about the card')
+    sent = posts()[0]['body']['messages']
+    check(len(posts()) == 1 and sent[0]['content'] == ev(pg, '() => LB.OMNI_PROMPT') and 'call the bank about the card' in sent[-1]['content'] and T(pg) in sent[-1]['content'], 'sends the system instructions, today and the raw text')
+    x = recs(pg, 'task')[0]
+    check(x['title'] == 'Call the bank about the card' and x['date'] == add_days(pg, 1) and 'Added task' in pg.inner_text('#toast'), x)
+    omni('gym every morning')
+    check([h['title'] for h in recs(pg, 'habit')] == ['Gym every morning'] and count(pg, '#home-today .habit:has-text("Gym every morning")') == 1, 'habit, and Home shows it without a reload')
+    omni('swim')
+    check(any(h['title'] == 'Swim (weekly)' for h in recs(pg, 'habit')), 'weekly habit says so')
+    omni('dentist 3:30pm')
+    e = recs(pg, 'event')[0]
+    check(e['title'] == 'Dentist' and e['date'] == add_days(pg, 2) and e['time'] == '15:30', f'calendar event, time read from the text, fenced JSON accepted: {e}')
+    omni('read 12 books this year')
+    g = recs(pg, 'goal')[0]
+    check(g['title'] == 'Read 12 books' and g['by'] == T(pg)[:4] + '-12-31', g)
+    omni('idea: fractal voids vs sims')
+    n = recs(pg, 'note')[0]
+    check(n['title'] == 'Fractal voids idea' and n['body'].startswith('Idea: compare') and 'Saved' in pg.inner_text('#toast'), n)
+    pg.click('#toast-action'); pg.wait_for_timeout(250)
+    check(not recs(pg, 'note'), 'Undo takes it back')
+    check(ev(pg, '() => lifeBrainState.tasks.length === 1 && lifeBrainState.habits.length === 2 && lifeBrainState.calendarEvents.length === 1 && lifeBrainState.goals.length === 1'), 'lifeBrainState is a live view of everything')
+    pg.click('.fab'); pg.wait_for_selector('#qa-title'); pg.fill('#qa-title', 'junk words'); pg.press('#qa-title', 'Enter')
+    pg.wait_for_selector('.sheet .err:not(:empty)')
+    check('didn’t say what kind' in pg.inner_text('.sheet .err') and pg.input_value('#qa-title') == 'junk words' and len(recs(pg, 'task')) == 1, 'unusable answer: nothing added, text kept')
+    pg.click('.sheet .kind:has-text("Task")'); pg.click('#qa-add'); sheet_closed(pg)
+    check(len(recs(pg, 'task')) == 2, 'picking a kind adds it without the AI')
 
 @test('Tasks', 'Quick add reads a date word at the end: one step instead of five, with Undo')
 def _(pg, ctx):

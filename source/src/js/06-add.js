@@ -1,7 +1,8 @@
 /* ===== Quick add: the + button. One sheet for a task, event, note, habit or goal: type, tap a chip, Add.
    Date words at the end of what you type still work ("Call mom tomorrow"), and events read a time ("3pm"). ===== */
 const QA_KINDS = [['task', 'Task'], ['event', 'Event'], ['note', 'Note'], ['habit', 'Habit'], ['goal', 'Goal']];
-const QA_HINT = { task: 'Call mom tomorrow', event: 'Dentist friday 3pm', note: 'Write it down. Organise it later.', habit: 'Walk 20 minutes', goal: 'Finish Paper 2' };
+const qaKinds = () => (AI.provider() !== 'none' ? [['auto', `<span class="ai-mark !h-4 !w-4">${icon('spark')}</span>Auto`]] : []).concat(QA_KINDS); // Auto: your AI decides
+const QA_HINT = { auto: 'Anything: “dentist friday 3pm”, “gym every morning”', task: 'Call mom tomorrow', event: 'Dentist friday 3pm', note: 'Write it down. Organise it later.', habit: 'Walk 20 minutes', goal: 'Finish Paper 2' };
 const QA = { kind: 'task', date: '' };
 const weekendOf = (t) => { const w = parseYmd(t).getDay(); return w === 6 || w === 0 ? t : addDays(t, 6 - w); };
 
@@ -26,13 +27,15 @@ function qaExtra(kind) {
     <label class="field"><span>Time <small>(leave empty for all day)</small></span><input type="time" name="time" id="qa-time"></label>`;
   if (kind === 'note') return `<div class="field"><span>For</span>${dayChips('when', QA.date || today())}</div>`;
   if (kind === 'habit') return `<p class="hint">It shows on Home and Today, ready to tick each day.</p>${goalChips()}`;
+  if (kind === 'auto') return '<p class="hint">Type it however it comes. Your AI decides whether it’s a task, event, note, habit or goal, adds it in the right place, and Undo takes it back. Pick a kind yourself to add it without the AI.</p>';
   return '<p class="hint">Just the name for now. Next you can add its first step; a date and a reason are optional.</p>';
 }
 A['quick-add'] = (el) => {
   QA.date = (el && el.dataset && isYmd(el.dataset.date) && el.dataset.date) || '';
-  QA.kind = (el && el.dataset && QA_KINDS.some(([k]) => k === el.dataset.kind) && el.dataset.kind) || 'task';
+  const kinds = qaKinds();
+  QA.kind = (el && el.dataset && kinds.some(([k]) => k === el.dataset.kind) && el.dataset.kind) || (navigator.onLine === false ? 'task' : kinds[0][0]); // offline, the AI can't help
   openSheet({ title: 'Add', body: `<form class="form" data-form="quick-add" id="qa-form">
-    <div class="kinds" role="radiogroup" aria-label="What to add">${QA_KINDS.map(([k, l]) => `<label class="kind"><input type="radio" name="kind" value="${k}" ${k === QA.kind ? 'checked' : ''}>${l}</label>`).join('')}</div>
+    <div class="kinds" role="radiogroup" aria-label="What to add">${kinds.map(([k, l]) => `<label class="kind"><input type="radio" name="kind" value="${k}" ${k === QA.kind ? 'checked' : ''}>${l}</label>`).join('')}</div>
     <input id="qa-title" name="title" class="input !text-[18px]" maxlength="300" autocomplete="off" enterkeyhint="done" placeholder="${esc(QA_HINT[QA.kind])}" aria-label="What to add">
     <div id="qa-extra" class="flex flex-col gap-4">${qaExtra(QA.kind)}</div>
     <p class="err" data-form-error></p>
@@ -72,10 +75,11 @@ function parseTime(text) {
 }
 LB.parseTime = parseTime;
 F['quick-add'] = async (form, v) => {
-  const kind = QA_KINDS.some(([k]) => k === v.kind) ? v.kind : 'task';
+  const kind = qaKinds().some(([k]) => k === v.kind) ? v.kind : 'task';
   let title = String(v.title || '').trim(), date = pickedDay(v);
   if (!title && kind !== 'note') throw new Error(kind === 'goal' ? 'Say what you want, in a few words.' : 'Type something first.');
-  if (kind === 'task') {
+  if (kind === 'auto') await omniAdd(title, form);
+  else if (kind === 'task') {
     const when = parseWhen(title); if (when) ({ title, date } = when);
     const r = await put({ type: 'task', title, date, done: false, doneDate: '', note: '', moved: 0, goalId: get(v.goalId) ? v.goalId : '' });
     closeSheet(); haptic();
