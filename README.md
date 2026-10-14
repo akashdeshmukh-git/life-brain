@@ -4,7 +4,11 @@ Tasks, calendar, notes, habits and goals in one simple app, with an optional AI 
 
 ## Adding things
 
-The **+** button at the bottom right of Home, Today and Calendar adds anything from one sheet. Pick Task, Event, Note, Habit or Goal, type, then tap a chip: Today, Tomorrow, Weekend, Next week, No date, or Other day for any date. Tasks and habits have goal chips too. Press Enter or tap Add. A date word at the end still works ("Call mom friday"), and an event reads its time ("Dentist 3:30pm"). A goal needs only its name and opens straight at its first step. On Goals and Notes, + adds a goal or a note.
+The **+** button at the bottom right of Home, Today and Calendar adds anything from one sheet.
+
+With an AI key set up, **Auto** is picked first. Type it however it comes ("dentist friday 3pm", "gym every morning", "read 12 books this year") and press Enter. Your AI decides whether it's a task, habit, goal, note or calendar event, and it's added straight away in the right place; the screen updates at once and one Undo takes it back. A time you typed ("3pm") becomes the event's time. If the AI's answer can't be used, nothing is added and your text stays in the box. Offline, + starts on Task instead. For a long brain dump with many things in it, write a note and use Organise.
+
+Or pick Task, Event, Note, Habit or Goal yourself, type, then tap a chip: Today, Tomorrow, Weekend, Next week, No date, or Other day for any date. Tasks and habits have goal chips too. Press Enter or tap Add. A date word at the end still works ("Call mom friday"), and an event reads its time ("Dentist 3:30pm"). A goal needs only its name and opens straight at its first step. On Goals and Notes, + adds a goal or a note.
 
 Swipe a task right to tick it off, or left to move it to tomorrow. Both have Undo, and the circle and the task sheet do the same.
 
@@ -34,6 +38,7 @@ Settings (last in the menu) has your name, the theme (Auto, Light, Dark), the ac
 
 Every ✦ button works in one tap: it asks your AI straight away and shows the answer. Anything it suggests changing is listed with tick boxes, so nothing changes until you tap Apply or Add, and one Undo reverses the lot. Each sheet has **See what is sent** if you want to check exactly what left the phone. With Automatic on, a button opens the suggestion your AI already prepared instead of asking again. When you have goals, each request includes every goal's reason, date and current state, so the answers are about what you said you want.
 
+- **Auto** (in +): one thing you typed, sorted into a task, habit, goal, note or calendar event and added at once, with Undo.
 - **Organise** (in a note): turns a brain dump into tasks, events, habits and goals, tied to your goals.
 - **Plan steps** (in a goal, or a fix on Home): 3 to 6 next steps toward the goal, never past its date.
 - **Tie to goals** (a fix on Home): matches your open tasks to the goals they serve, so Where you're heading is accurate.

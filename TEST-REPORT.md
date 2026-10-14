@@ -1,6 +1,6 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **59 of 59 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **60 of 60 PASSED**.
 
 AI calls were tested against a local mock service, including Organise, the AI tools (Plan steps and Tie to goals among them) and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans, sorts or ties tasks to goals is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
 
@@ -60,6 +60,7 @@ The accessibility test runs axe-core on every screen and on the Add, task and go
 | Add | The + button: a task with a day chip and a goal chip in one sheet, Enter adds it, Undo takes it back | PASSED |
 | Add | The + button: an event reads its time, a habit and a goal need only a name, a note opens the editor, an empty task is refused | PASSED |
 | Tasks | Swipe a task right to tick it off, left to move it to tomorrow, each with Undo; a short drag does nothing | PASSED |
+| AI | The + box with AI: Auto comes first; raw text becomes a task, event, habit, goal or note, added at once with Undo; an unusable answer keeps your text | PASSED |
 | Tasks | Quick add reads a date word at the end: one step instead of five, with Undo | PASSED |
 | Data | Imported records are reshaped: bad ids, dates, times and markup are refused or neutralised | PASSED |
 | Data | Backup safety: Settings shows when a backup file was last saved; Home reminds only when one is overdue | PASSED |

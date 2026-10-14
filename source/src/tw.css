@@ -157,7 +157,7 @@
 @media (min-width: 720px) { .sheet-wrap { align-items: center; padding: 24px; } .sheet { border-radius: 28px; max-height: 88vh; } .sheet-grab { visibility: hidden; } }
 
 /* Toast with Undo */
-#toast { @apply fixed left-1/2 z-[60] flex max-w-[calc(100vw-32px)] items-center gap-3 rounded-full bg-ink py-2 pl-5 pr-2 text-[15px] text-canvas shadow-lift; bottom: calc(92px + var(--safe-b)); transform: translateX(-50%); animation: toast-in .2s ease-out; min-height: 48px; }
+#toast { @apply fixed left-1/2 z-[60] flex w-max max-w-[calc(100vw-32px)] items-center gap-3 rounded-3xl bg-ink py-2 pl-5 pr-2 text-[15px] leading-snug text-canvas shadow-lift; bottom: calc(92px + var(--safe-b)); transform: translateX(-50%); animation: toast-in .2s ease-out; min-height: 48px; }
 #toast span { @apply py-1.5; }
 #toast:not(:has(button)) { @apply pr-5; }
 #toast.bad { @apply bg-bad text-white; }
@@ -347,8 +347,8 @@
 .auto-parts .check { @apply text-sm; }
 
 /* What to add: one segmented row, so the five kinds never wrap */
-.kinds { @apply grid grid-cols-5 gap-1 rounded-full bg-sunk p-1; }
-.kind { @apply flex min-h-[38px] cursor-pointer select-none items-center justify-center rounded-full text-sm font-semibold text-muted; }
+.kinds { @apply grid grid-flow-col auto-cols-fr gap-1 rounded-full bg-sunk p-1; }
+.kind { @apply flex min-h-[38px] cursor-pointer select-none items-center justify-center gap-1 rounded-full text-sm font-semibold text-muted; }
 .kind input { @apply sr-only; }
 .kind:has(input:checked) { @apply bg-raised text-ink shadow-lift; }
 .kind:has(input:focus-visible) { outline: 2px solid rgb(var(--brand)); outline-offset: 1px; }
