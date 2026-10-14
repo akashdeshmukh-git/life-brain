@@ -1091,6 +1091,25 @@ def _(pg, ctx):
     check(m['start_url'] == './' and m['scope'] == './' and m['display'] == 'standalone' and m['orientation'] == 'portrait' and [x['url'] for x in m['shortcuts']] == ['./#add', './#today'] and 'journal' not in m['description'], m)
     check(ev(pg, "() => !!document.querySelector('link[rel=manifest][href=\"manifest.webmanifest\"]')"), 'manifest linked')
 
+@test('Feel', 'Ticking feels like something: the circle pops and the row slides away, the day bar fills, the last task says the list is clear; habits show streaks; screens slide in', motion=True)
+def _(pg, ctx):
+    open_app(pg, '')
+    ev(pg, """async () => { const t = today(), log = {}; for (let i = 0; i <= 3; i++) log[addDays(t, -i - 1)] = true;
+      await put({id:'a', type:'task', title:'First', date:t, done:false}); await put({id:'b', type:'task', title:'Second', date:t, done:false});
+      await put({id:'w', type:'habit', title:'Walk', log}); }""")
+    pg.wait_for_timeout(150)
+    check(pg.inner_text('#day-progress').endswith('0 of 2 done') and pg.inner_text('.habit[data-id=w] .streak') == '4', 'progress and streak')
+    pg.click('#home-today .task[data-task=a] .circle'); pg.wait_for_timeout(60)
+    check(count(pg, '.task.ticking[data-task=a]') == 1 and not ev(pg, "() => get('a').done"), 'the tick plays before the row goes')
+    pg.wait_for_timeout(500)
+    check(ev(pg, "() => get('a').done") and '1 of 2 done' in pg.inner_text('#day-progress') and pg.inner_text('#toast').startswith('Done'), 'then it is saved')
+    pg.click('#home-today .task[data-task=b] .circle'); pg.wait_for_timeout(600)
+    check('Today’s list is clear' in pg.inner_text('#home-today') and 'That’s everything for today. 2 tasks done.' in pg.inner_text('#toast'), 'the last one says so')
+    pg.click('.habit[data-id=w]'); pg.wait_for_timeout(80)
+    check(count(pg, '.habit.popping[data-id=w]') == 1 and pg.inner_text('.habit[data-id=w] .streak') == '5', 'habit pops and the streak grows')
+    pg.click('.menu-btn'); pg.wait_for_timeout(300); pg.click('.drawer-panel .nav-item[data-to=goals]'); pg.wait_for_timeout(30)
+    check(ev(pg, "() => document.getElementById('view').getAnimations().length") >= 1, 'the new screen slides in')
+
 @test('Tasks', 'Quick add reads a date word at the end: one step instead of five, with Undo')
 def _(pg, ctx):
     open_app(pg)
@@ -1226,7 +1245,7 @@ def main():
         browser = p.chromium.launch()
         for cat, name, fn, opts in TESTS:
             if only and not any(o.lower() in (cat + ' ' + name).lower() for o in only): continue
-            ctx = browser.new_context(viewport={'width': 390, 'height': 844}, accept_downloads=True, service_workers='allow')
+            ctx = browser.new_context(viewport={'width': 390, 'height': 844}, accept_downloads=True, service_workers='allow', reduced_motion='no-preference' if opts.get('motion') else 'reduce')  # most tests skip the animations; the feel test keeps them
             if not opts.get('intro'): ctx.add_init_script('window.LB_NO_INTRO = true')  # the welcome guide has its own test
             pg = ctx.new_page(); errors = []
             pg.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))

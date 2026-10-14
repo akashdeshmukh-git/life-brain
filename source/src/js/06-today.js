@@ -23,7 +23,7 @@ const addTaskForm = (date, id, ph = 'Add a task', parse = false) => `<form class
   <input id="${id}" name="title" placeholder="${esc(ph)}" maxlength="300" autocomplete="off" enterkeyhint="done" aria-label="${esc(ph)}"></form>`;
 const eventRow = (e) => `<button class="event" data-action="event-edit" data-id="${e.id}"><span class="event-time">${e.time ? esc(fmtTime(e.time)) : 'All day'}</span><span class="event-title">${esc(e.title)}</span></button>`;
 const sectionH = (title, right = '') => `<div class="sec-h"><h2>${title}</h2>${right}</div>`;
-const habitChip = (h, d) => { const on = habitDone(h, d); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${d}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}</button>`; };
+const habitChip = (h, d) => { const on = habitDone(h, d), n = habitStreak(h, d); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${d}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}${n >= 2 ? `<span class="streak" title="${n} days in a row" aria-label="${n} days in a row">${n}</span>` : ''}</button>`; };
 
 VIEWS.today = () => {
   const D = data(), t = today();
@@ -83,10 +83,20 @@ F['task-add'] = async (form, v) => {
 A['task-toggle'] = async (el) => {
   const x = get(el.dataset.id);
   if (!x) return;
-  const was = { done: x.done, doneDate: x.doneDate };
-  await put({ ...x, done: !x.done, doneDate: x.done ? '' : today() });
+  const was = { done: x.done, doneDate: x.doneDate }, t = today();
+  const row = !x.done && !reduceMotion() && $$(`.task[data-task="${CSS.escape(x.id)}"]`).find((r) => r.offsetParent);
+  if (row) { // the tick: the circle fills with a little pop, the title strikes through, the row slides off
+    if (row.classList.contains('ticking')) return;
+    haptic(); row.classList.add('ticking');
+    await new Promise((r) => setTimeout(r, 380));
+  } else if (!x.done) haptic();
+  await put({ ...x, done: !x.done, doneDate: x.done ? '' : t });
   if (SH.open && $('#goal-steps') && ui.goalOpen) LB.goalDetail(get(ui.goalOpen)); // ticked from inside a goal
-  if (!x.done) { haptic(); toast('Done', '', { action: 'Undo', onAction: () => put({ ...get(x.id), ...was }) }); }
+  if (x.done) return;
+  const left = data().tasks.filter((y) => !y.done && isYmd(y.date) && y.date <= t).length;
+  const doneToday = doneOn(data(), t).length;
+  toast(left ? 'Done' : `That’s everything for today. ${plural(doneToday, 'task')} done.`, '', { action: 'Undo', onAction: () => put({ ...get(x.id), ...was }) });
+  if (!left) haptic('win');
 };
 /* Push a task to tomorrow: the swipe left, and the Tomorrow chip's shortcut. */
 async function toTomorrow(x) {
@@ -201,6 +211,7 @@ A['habit-toggle'] = async (el) => {
   const log = { ...(h.log || {}) };
   if (log[d]) delete log[d]; else { log[d] = true; haptic(); }
   await put({ ...h, log });
+  if (log[d] && !reduceMotion()) { const c = $(`.habit[data-id="${CSS.escape(h.id)}"]`); if (c) c.classList.add('popping'); } // the redraw kept the chip; let it pop
   if (SH.open && $('#goal-steps') && ui.goalOpen) LB.goalDetail(get(ui.goalOpen)); // ticked from inside a goal
 };
 A['habit-new'] = () => habitSheet(null);

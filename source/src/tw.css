@@ -362,3 +362,15 @@
 .more-fold[open] > summary svg { @apply rotate-0; }
 .task.compact .task-main { @apply py-3; }
 .task.compact .tag { @apply max-w-[112px]; } /* the title gets the room; the tag is a hint */
+
+/* ---- Feel: the tick, the habit pop, the day filling up ---- */
+@keyframes tick-pop { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+@keyframes row-out { to { opacity: 0; transform: translateX(24px); } }
+.task.ticking .circle::before { @apply border-brand bg-brand; animation: tick-pop .3s cubic-bezier(.2,.8,.2,1); }
+.task.ticking .circle svg { @apply text-on-brand opacity-100; transition: opacity .1s; }
+.task.ticking .task-title { @apply text-muted line-through; transition: color .15s; }
+.task.ticking .task-face { animation: row-out .22s .16s ease-in forwards; }
+.habit.popping .habit-tick { animation: tick-pop .3s cubic-bezier(.2,.8,.2,1); }
+.streak { @apply -mr-1.5 ml-0.5 inline-grid h-5 min-w-[20px] place-items-center rounded-full bg-sunk px-1.5 text-[11px] font-bold tabular-nums text-muted; }
+.habit[aria-pressed="true"] .streak { background: rgb(var(--on-brand) / .22); color: inherit; }
+.day-fill { background: var(--grad) !important; transition: width .4s cubic-bezier(.2,.8,.2,1); }

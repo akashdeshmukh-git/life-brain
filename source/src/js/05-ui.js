@@ -96,8 +96,10 @@ function render(focus) {
   try { view.innerHTML = warn + VIEWS[route.name](route.sub);
     for (const [id, v] of typed) { const el = $('#' + CSS.escape(id), view); if (el && !el.value && v) { el.value = v; if (el.dataset.live === 'ai-key') el.dispatchEvent(new Event('input', { bubbles: true })); } } $$('form', view).forEach((f) => (f.noValidate = true)); }
   catch (e) { console.error(e); view.innerHTML = `<div class="py-16 text-center text-muted">This screen hit an error. Your data is safe.<br><small>${esc(e.message)}</small></div>`; }
+  const moved = key !== lastKey && lastKey !== '';
   lastKey = key;
   window.scrollTo(0, keep);
+  if (moved && !reduceMotion()) view.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' }); // a new screen arrives, it doesn't just swap
   const back = activeId && $('#' + CSS.escape(activeId), view);
   if (back) { back.focus({ preventScroll: true }); if (caret) try { back.setSelectionRange(caret[0], caret[1]); } catch (_) {} } // typing survives a redraw
   else if (focus) view.focus({ preventScroll: true });
@@ -152,7 +154,7 @@ function toast(msg, tone = '', opts = {}) {
   toastTimer = setTimeout(() => (t.hidden = true), opts.action || tone === 'bad' ? 5000 : 2400);
   if (tone === 'bad') haptic('error');
 }
-function haptic(kind) { try { if (navigator.vibrate) navigator.vibrate(kind === 'error' ? [12, 60, 12] : 8); } catch (_) {} }
+function haptic(kind) { try { if (navigator.vibrate) navigator.vibrate(kind === 'error' ? [12, 60, 12] : kind === 'win' ? [10, 40, 10, 40, 24] : 8); } catch (_) {} }
 LB.toast = toast;
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast('Copied'); }
