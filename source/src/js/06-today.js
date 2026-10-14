@@ -2,19 +2,22 @@
 const ui = { anytime: true, done: false };
 
 /* One task row. The circle ticks it; the rest opens it. On a phone, swipe right to tick it off, left for tomorrow. */
-function taskRow(x, t = today(), { showDate = true, showGoal = true } = {}) {
+function taskRow(x, t = today(), { showDate = true, showGoal = true, compact = false } = {}) {
   const over = isOverdue(x, t);
   const gl = showGoal && x.goalId && get(x.goalId);
   const tags = [
     showDate && over ? `<span class="tag late">Due ${esc(relDate(x.date, t).replace(/^(Yesterday)$/, 'yesterday'))}</span>` : '',
     showDate && !over && isYmd(x.date) && x.date > t ? `<span class="tag">${esc(relDate(x.date, t))}</span>` : '',
-    gl ? `<span class="tag tgoal">${icon('goal')}<span class="truncate">${esc(trunc(gl.title, 28))}</span></span>` : '',
+    gl ? `<span class="tag tgoal">${icon('goal')}<span class="truncate">${esc(trunc(gl.title, compact ? 16 : 28))}</span></span>` : '',
     x.note && !gl ? '<span class="tag">Note</span>' : '',
-  ].filter(Boolean).join('');
-  return `<div class="task${x.done ? ' done' : ''}" data-task="${x.id}">
+  ].filter(Boolean);
+  const circle = `<button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>`;
+  const main = compact // one line: the title, and the one tag that matters most on the right
+    ? `<button class="task-main !flex-row items-center !gap-2" data-action="task-edit" data-id="${x.id}"><span class="task-title min-w-0 flex-1 truncate">${esc(x.title)}</span>${tags[0] ? `<span class="shrink-0">${tags[0]}</span>` : ''}</button>`
+    : `<button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${tags.length ? `<span class="task-meta">${tags.join('')}</span>` : ''}</button>`;
+  return `<div class="task${compact ? ' compact' : ''}${x.done ? ' done' : ''}" data-task="${x.id}">
     <div class="task-swipe" aria-hidden="true"><span>${icon('check')}Done</span><span>Tomorrow</span></div>
-    <div class="task-face"><button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>
-    <button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${tags ? `<span class="task-meta">${tags}</span>` : ''}</button></div></div>`;
+    <div class="task-face">${circle}${main}</div></div>`;
 }
 const addTaskForm = (date, id, ph = 'Add a task', parse = false) => `<form class="add-row" data-form="task-add" data-date="${date}"${parse ? ' data-parse="1"' : ''}><span class="add-ic">${icon('plus')}</span>
   <input id="${id}" name="title" placeholder="${esc(ph)}" maxlength="300" autocomplete="off" enterkeyhint="done" aria-label="${esc(ph)}"></form>`;

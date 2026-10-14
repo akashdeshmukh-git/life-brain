@@ -12,7 +12,7 @@ The accessibility test runs axe-core on every screen and on the Add, task and go
 | Start | The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it | PASSED |
 | Start | First open shows How it works once; it can be opened again from the menu | PASSED |
 | Start | Today still works as before | PASSED |
-| Home | Brief: headline with your name, the day as a line, today’s events as chips, tasks and habits ticked in place, coming up, already done | PASSED |
+| Home | Do first: a greeting with your name, today’s events as chips, the list and habits ticked in place, a box to add, and the day, coming up and done folded away | PASSED |
 | Home | A full day reads as a climb; events can have an end time | PASSED |
 | Tasks | Add, tick, undo and see done tasks fold away | PASSED |
 | Tasks | Edit a task: rename, note, push to tomorrow (counted as moved), delete with undo | PASSED |

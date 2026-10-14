@@ -26,13 +26,15 @@ function headingSection(D, t) {
 const FIXES = new Map();
 function computeFixes(D, t) {
   const out = [], hasAI = AI.provider() !== 'none', tm = addDays(t, 1), snooze = S.settings.fixSnooze || {};
+  const shown = (pulsePick(D, t) || {}).g; // Home's goal line already names this goal; a card that only opens it would repeat it
   for (const g of activeGoals(D)) {
     const s = goalStatus(D, g, t);
-    if (s.state === 'no-steps') out.push({ id: 'steps-' + g.id, title: `“${g.title}” has no next step`, text: 'A goal moves when there’s a concrete next thing to do.', label: hasAI ? '✦ Plan steps' : 'Add a step', run: () => (hasAI ? A['goal-steps']({ dataset: { id: g.id } }) : goalDetail(g)) });
+    if (!hasAI && shown && g.id === shown.id && (s.state === 'no-steps' || s.state === 'behind')) continue;
+    if (s.state === 'no-steps') out.push({ id: 'steps-' + g.id, title: `Plan the next step for “${g.title}”`, text: 'A goal moves when there’s a concrete next thing to do.', label: hasAI ? '✦ Plan steps' : 'Add a step', run: () => (hasAI ? A['goal-steps']({ dataset: { id: g.id } }) : goalDetail(g)) });
     else if (s.state === 'stalled' && s.open.length && !s.open.some((x) => x.date && x.date >= t && x.date <= tm)) { // already on for today or tomorrow: nothing to fix
       const step = s.open.slice().sort((a, b) => (a.date || '9').localeCompare(b.date || '9') || byCreated(a, b))[0];
       out.push({ id: 'stall-' + g.id + '-' + t, title: `Get “${g.title}” moving`, text: `Nothing in ${s.idle} days. Put “${step.title}” on tomorrow?`, label: 'Put it on tomorrow', apply: async (rec) => { const x = get(step.id); if (x) await rec.update({ ...x, date: tm, moved: (x.moved || 0) + (x.date && x.date < tm ? 1 : 0) }); return `“${trunc(step.title, 30)}” is on tomorrow`; } });
-    } else if (s.state === 'behind') out.push({ id: 'behind-' + g.id + '-' + weekStart(t), title: `“${g.title}” is behind`, text: s.perWeekNeed ? `It needs about ${plural(s.perWeekNeed, 'step')} a week to make ${fmtDate(g.by, { month: 'short', day: 'numeric' })}; lately ${s.perWeekNow}.` : 'At this pace it misses its date.', label: hasAI ? '✦ Plan my week' : 'Open goal', run: () => (hasAI ? A['plan-week']() : goalDetail(g)) });
+    } else if (s.state === 'behind') out.push({ id: 'behind-' + g.id + '-' + weekStart(t), title: `Catch up on “${g.title}”`, text: s.perWeekNeed ? `It needs about ${plural(s.perWeekNeed, 'step')} a week to make ${fmtDate(g.by, { month: 'short', day: 'numeric' })}; lately ${s.perWeekNow}.` : 'At this pace it misses its date.', label: hasAI ? '✦ Plan my week' : 'Open goal', run: () => (hasAI ? A['plan-week']() : goalDetail(g)) });
   }
   // Overplanning: more on today than you usually finish in a day
   const cap = capacity(D, t), todays = D.tasks.filter((x) => !x.done && x.date === t);
@@ -55,20 +57,38 @@ function computeFixes(D, t) {
   if (S.records.size >= 15 && (last == null || last >= 30)) out.push({ id: 'backup', title: 'Save a backup file', text: `Everything lives only on this phone. ${last == null ? 'No backup file has been saved yet.' : `The last one was saved ${last} days ago.`}`, label: 'Save backup', run: () => A.export() });
   return out.filter((f) => !(snooze[f.id] && snooze[f.id] >= t)).slice(0, 5);
 }
-/* Fixes sit side by side: swipe through them. Suggestions your AI prepared by itself come first. */
+/* One fix at a time, so Home stays short. "1 of 4" steps to the next. Suggestions your AI prepared come first. */
 function fixesSection(D, t) {
   const pend = pendingItems(), fixes = computeFixes(D, t);
   FIXES.clear(); fixes.forEach((f) => FIXES.set(f.id, f));
-  const n = pend.length + fixes.length;
-  if (!n) return '';
-  const mark = `<span class="ai-mark">${icon('spark')}</span>`;
-  const card = (title, text, btns, attrs = '', ai = false) => `<div class="fix-card" ${attrs}><div class="flex items-start gap-2">${ai ? mark : ''}<div class="fix-title min-w-0 flex-1">${title}</div></div><p class="fix-text">${text}</p><div class="fix-btns">${btns}</div></div>`;
-  return `<section class="mt-7" id="fixes"><div class="sec-h"><h2>Fixes for you</h2>${n > 1 ? `<span class="text-sm text-muted">Swipe for ${n - 1} more</span>` : ''}</div>
-    <div class="fix-strip mt-1">
-    ${pend.map((it) => card(`<button class="bi-title text-left font-semibold" ${it.attrs}>${esc(it.title.replace(/^✦\s*/, ''))}</button>`, it.text, `<button class="btn sm primary" ${it.attrs}>Open</button><button class="btn sm ghost text-muted" data-action="pending-dismiss" ${it.attrs.match(/data-id="[^"]*"/)[0]}>Not now</button>`, '', true)).join('')}
-    ${fixes.map((f) => card(esc(f.title), esc(f.text), `<button class="btn sm primary" data-action="fix-apply" data-fix="${esc(f.id)}">${esc(f.label)}</button><button class="btn sm ghost text-muted" data-action="fix-dismiss" data-fix="${esc(f.id)}">Not now</button>`, `data-fix="${esc(f.id)}"`, f.label.startsWith('✦'))).join('')}
-    </div></section>`;
+  const card = (title, text, btns, attrs, ai) => `<div class="fix-card !w-full" ${attrs}><div class="flex items-start gap-2">${ai ? `<span class="ai-mark">${icon('spark')}</span>` : ''}<div class="fix-title min-w-0 flex-1">${title}</div></div><p class="fix-text">${text}</p><div class="fix-btns">${btns}</div></div>`;
+  const cards = [
+    ...pend.map((it) => { const id = it.attrs.match(/data-id="([^"]*)"/)[1]; return { key: 'pending-' + id, html: (pager) => card(`<button class="bi-title text-left font-semibold" ${it.attrs}>${esc(it.title.replace(/^✦\s*/, ''))}</button>`, it.text, `<button class="btn sm primary" ${it.attrs}>Open</button><button class="btn sm ghost text-muted" data-action="pending-dismiss" data-id="${id}">Not now</button>${pager}`, '', true) }; }),
+    ...fixes.map((f) => ({ key: f.id, html: (pager) => card(esc(f.title), esc(f.text), `<button class="btn sm primary" data-action="fix-apply" data-fix="${esc(f.id)}">${esc(f.label)}</button><button class="btn sm ghost text-muted" data-action="fix-dismiss" data-fix="${esc(f.id)}">Not now</button>${pager}`, `data-fix="${esc(f.id)}"`, f.label.startsWith('✦')) })),
+  ];
+  if (!cards.length) return '';
+  const i = Math.max(0, cards.findIndex((c) => c.key === ui.fixAt)), next = cards[(i + 1) % cards.length];
+  const pager = cards.length > 1 ? `<button class="link ml-auto tabular-nums" data-action="fix-next" data-next="${esc(next.key)}" aria-label="Next fix, ${i + 1} of ${cards.length}">${i + 1} of ${cards.length}${icon('right')}</button>` : '';
+  return `<section class="mt-4" id="fixes" aria-label="Fixes for you">${cards[i].html(pager)}</section>`;
 }
+A['fix-next'] = (el) => { ui.fixAt = el.dataset.next; render(false); };
+
+/* Goals in one line: the one that needs you, or that all is well. Tap for the goal (or all goals). */
+/* The goal that needs you most: behind its date, then stalled longest, then missing a next step. */
+function pulsePick(D, t) {
+  const st = activeGoals(D).map((g) => ({ g, s: goalStatus(D, g, t) }));
+  return st.find((x) => x.s.state === 'behind') || st.filter((x) => x.s.state === 'stalled').sort((a, b) => b.s.idle - a.s.idle)[0] || st.find((x) => x.s.state === 'no-steps') || null;
+}
+function goalPulse(D, t) {
+  const row = (attrs, dot, text) => `<button class="pulse mt-4 flex w-full items-center gap-3 rounded-2xl bg-raised px-4 py-3.5 text-left" id="goal-pulse" ${attrs}><span class="hdot" style="background:${dot}"></span><span class="min-w-0 flex-1 truncate text-[15px] font-semibold">${esc(text)}</span><span class="text-muted">${icon('right')}</span></button>`;
+  if (!D.goals.length) return row('data-action="goal-new"', 'rgb(var(--brand))', 'Add your first goal');
+  const pick = pulsePick(D, t), n = activeGoals(D).length;
+  if (!pick) return row('data-action="nav" data-to="goals"', 'rgb(var(--good))', n ? `${n === 1 ? 'Your goal is' : `All ${n} goals are`} on track` : 'Every goal is done');
+  const name = trunc(pick.g.title, 34), s = pick.s;
+  const text = s.state === 'behind' ? `${name} is behind` : s.state === 'stalled' ? `${name}: nothing in ${s.idle} days` : `${name} needs a next step`;
+  return row(`data-action="goal-open" data-id="${pick.g.id}"`, s.state === 'no-steps' ? 'rgb(var(--muted))' : '#f0a23b', text);
+}
+
 A['fix-apply'] = async (el) => {
   const f = FIXES.get(el.dataset.fix);
   if (!f) return;
