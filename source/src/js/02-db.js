@@ -4,8 +4,8 @@ const DB_NAME = 'lifebrain2';
 const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
   name: '',
-  accent: 'clay',
-  look: 2, // 2 = the warm look; older saved settings move to clay once
+  accent: 'violet',
+  look: 3, // 3 = the Tailwind look; settings from before it move from the old default (clay) to violet once
   ai: { active: 'auto', linked: [], models: {}, baseUrls: {}, timeoutSec: 60, rememberKeys: false },
 };
 const S = (LB.S = {
@@ -69,7 +69,8 @@ function mergeSettings(v) {
   if (!['system', 'light', 'dark'].includes(out.theme)) out.theme = 'system';
   out.auto = { on: false, today: true, overdue: true, notes: true, week: true, plan: true, ...((v && v.auto) || {}) };
   if (!Array.isArray(out.pending)) out.pending = [];
-  if (v && v.look !== 2) { out.look = 2; if (!v.accent || v.accent === 'blue') out.accent = 'clay'; }
+  if (out.accent === 'purple') out.accent = 'violet'; // Purple became Violet, from the logo
+  if (v && v.look !== 3) { out.look = 3; if (!v.accent || v.accent === 'clay' || (v.look !== 2 && v.accent === 'blue')) out.accent = 'violet'; }
   return out;
 }
 async function dbInit() {

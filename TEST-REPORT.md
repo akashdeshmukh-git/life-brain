@@ -1,8 +1,10 @@
 # Test report
 
-Automated browser tests (Playwright, Chromium, phone-size screen): **56 of 56 PASSED**.
+Automated browser tests (Playwright, Chromium, phone-size screen): **59 of 59 PASSED**.
 
 AI calls were tested against a local mock service, including Organise, the AI tools (Plan steps and Tie to goals among them) and Automatic runs. Real AI services: NOT TESTED (BLOCKED BY ENVIRONMENT: the build machine cannot reach them), so how well a real model plans, sorts or ties tasks to goals is untested. Automatic runs on a real phone (app reopened, back online) are NOT TESTED. The accessibility test needs axe-core (`npm i axe-core` in `source`, or set `AXE_JS`); without it, that test reports BLOCKED BY ENVIRONMENT.
+
+The accessibility test runs axe-core on every screen and on the Add, task and goal sheets and the menu, in light and dark, with the clock fixed at 3 PM so past events are checked too. An independent review of the Tailwind rewrite found 14 defects (footers covering buttons on iPhones, a habit chip not updating inside a goal, contrast on past events, focus on title boxes, and others); all are fixed and the ones that could regress have tests.
 
 | Area | Test | Result |
 |---|---|---|
@@ -10,7 +12,7 @@ AI calls were tested against a local mock service, including Organise, the AI to
 | Start | The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it | PASSED |
 | Start | First open shows How it works once; it can be opened again from the menu | PASSED |
 | Start | Today still works as before | PASSED |
-| Home | Brief: headline with your name, the day as a line with one dot per event, three acts, what needs you and what is done | PASSED |
+| Home | Brief: headline with your name, the day as a line, today’s events as chips, tasks and habits ticked in place, coming up, already done | PASSED |
 | Home | A full day reads as a climb; events can have an end time | PASSED |
 | Tasks | Add, tick, undo and see done tasks fold away | PASSED |
 | Tasks | Edit a task: rename, note, push to tomorrow (counted as moved), delete with undo | PASSED |
@@ -54,11 +56,14 @@ AI calls were tested against a local mock service, including Organise, the AI to
 | Data | First start brings over data from the earlier Life Brain once, skipping examples, and leaves the old data untouched | PASSED |
 | Data | Delete everything needs DELETE typed, then clears all | PASSED |
 | Look | Dark is true black; theme and colour switch from Settings and persist | PASSED |
-| Look | Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once | PASSED |
+| Look | New look everywhere: violet by default, display type for page titles, pill buttons, and the old clay default moves to violet once | PASSED |
+| Add | The + button: a task with a day chip and a goal chip in one sheet, Enter adds it, Undo takes it back | PASSED |
+| Add | The + button: an event reads its time, a habit and a goal need only a name, a note opens the editor, an empty task is refused | PASSED |
+| Tasks | Swipe a task right to tick it off, left to move it to tomorrow, each with Undo; a short drag does nothing | PASSED |
 | Tasks | Quick add reads a date word at the end: one step instead of five, with Undo | PASSED |
 | Data | Imported records are reshaped: bad ids, dates, times and markup are refused or neutralised | PASSED |
 | Data | Backup safety: Settings shows when a backup file was last saved; Home reminds only when one is overdue | PASSED |
-| Accessibility | axe-core finds no WCAG 2.2 A/AA problems on any screen, light or dark | PASSED |
+| Accessibility | axe-core finds no WCAG 2.2 A/AA problems on any screen or the main sheets, light or dark | PASSED |
 | Look | Fits a small phone (360px) on every screen with no sideways scrolling; uses Inter | PASSED |
 | Offline | Installs a service worker and opens with no network | PASSED |
 | Safety | Titles with HTML are shown as text, not run | PASSED |

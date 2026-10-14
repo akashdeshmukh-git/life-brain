@@ -1,19 +1,26 @@
 /* ===== Today: today's tasks and habit ticks ===== */
 const ui = { anytime: true, done: false };
 
-/* One task row. The circle ticks it; the rest opens it. */
+/* One task row. The circle ticks it; the rest opens it. On a phone, swipe right to tick it off, left for tomorrow. */
 function taskRow(x, t = today(), { showDate = true, showGoal = true } = {}) {
   const over = isOverdue(x, t);
   const gl = showGoal && x.goalId && get(x.goalId);
-  const meta = [showDate && over ? `<span class="bad">${esc(relDate(x.date, t))}</span>` : '', gl ? `<span class="tgoal">${icon('goal')}${esc(trunc(gl.title, 28))}</span>` : '', x.note && !gl ? '<span>Note</span>' : ''].filter(Boolean).join(' · ');
+  const tags = [
+    showDate && over ? `<span class="tag late">Due ${esc(relDate(x.date, t).replace(/^(Yesterday)$/, 'yesterday'))}</span>` : '',
+    showDate && !over && isYmd(x.date) && x.date > t ? `<span class="tag">${esc(relDate(x.date, t))}</span>` : '',
+    gl ? `<span class="tag tgoal">${icon('goal')}<span class="truncate">${esc(trunc(gl.title, 28))}</span></span>` : '',
+    x.note && !gl ? '<span class="tag">Note</span>' : '',
+  ].filter(Boolean).join('');
   return `<div class="task${x.done ? ' done' : ''}" data-task="${x.id}">
-    <button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>
-    <button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</button></div>`;
+    <div class="task-swipe" aria-hidden="true"><span>${icon('check')}Done</span><span>Tomorrow</span></div>
+    <div class="task-face"><button class="circle" data-action="task-toggle" data-id="${x.id}" role="checkbox" aria-checked="${!!x.done}" aria-label="${x.done ? 'Mark not done' : 'Mark done'}: ${esc(x.title)}">${icon('check')}</button>
+    <button class="task-main" data-action="task-edit" data-id="${x.id}"><span class="task-title">${esc(x.title)}</span>${tags ? `<span class="task-meta">${tags}</span>` : ''}</button></div></div>`;
 }
 const addTaskForm = (date, id, ph = 'Add a task', parse = false) => `<form class="add-row" data-form="task-add" data-date="${date}"${parse ? ' data-parse="1"' : ''}><span class="add-ic">${icon('plus')}</span>
   <input id="${id}" name="title" placeholder="${esc(ph)}" maxlength="300" autocomplete="off" enterkeyhint="done" aria-label="${esc(ph)}"></form>`;
 const eventRow = (e) => `<button class="event" data-action="event-edit" data-id="${e.id}"><span class="event-time">${e.time ? esc(fmtTime(e.time)) : 'All day'}</span><span class="event-title">${esc(e.title)}</span></button>`;
 const sectionH = (title, right = '') => `<div class="sec-h"><h2>${title}</h2>${right}</div>`;
+const habitChip = (h, d) => { const on = habitDone(h, d); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${d}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}</button>`; };
 
 VIEWS.today = () => {
   const D = data(), t = today();
@@ -22,19 +29,22 @@ VIEWS.today = () => {
   const anytime = D.tasks.filter((x) => !x.done && !x.date).sort(byCreated);
   const done = doneOn(D, t).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   const overdue = open.filter((x) => x.date < t).length;
-  return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })), `<button class="pill ai-pill" data-action="plan-week">${icon('spark')}Plan week</button>`)
-    + (events.length ? `<section class="card">${events.map(eventRow).join('')}</section>` : '')
-    + `<section class="card tasks">${addTaskForm(t, 'add-today', 'Add a task (try “… tomorrow”)', true)}
-      ${overdue ? `<div class="mini-h"><span>${plural(overdue, 'overdue task')}</span><span class="mini-btns"><button class="link" data-action="overdue-sort">${icon('spark')}Sort out</button><button class="link" data-action="overdue-today">Move to today</button></span></div>` : ''}
+  return header('Today', esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' })), `<button class="pill ai-pill" data-action="plan-week"><span class="ai-mark !h-5 !w-5">${icon('spark')}</span>Plan week</button>`)
+    + (events.length ? `<section class="card mb-4 !py-1">${events.map(eventRow).join('')}</section>` : '')
+    + addTaskForm(t, 'add-today', 'Add a task (try “… tomorrow”)', true)
+    + (overdue ? `<div class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl bg-warn-bg px-4 py-2.5 text-warn" id="overdue-bar"><b class="mr-auto text-[15px] font-semibold">${plural(overdue, 'overdue task')}</b>
+        <button class="btn sm bg-raised text-ink" data-action="overdue-sort"><span class="ai-mark !h-5 !w-5">${icon('spark')}</span>Sort out</button><button class="btn sm bg-raised text-ink" data-action="overdue-today">Move to today</button></div>` : '')
+    + `<section class="card tasks mt-4 !py-1">
       ${(ui.allOpen ? open : open.slice(0, 40)).map((x) => taskRow(x, t)).join('')}
       ${open.length > 40 && !ui.allOpen ? `<button class="fold" data-action="fold" data-k="allOpen" aria-expanded="false">${icon('down')}Show ${open.length - 40} more</button>` : ''}
-      ${!open.length && !anytime.length && !done.length ? '<p class="empty-line">Nothing for today. Type above to add a task.</p>' : ''}
-      ${anytime.length ? `<button class="fold" data-action="fold" data-k="anytime" aria-expanded="${ui.anytime}">${icon('down')}Anytime <span class="count">${anytime.length}</span></button>${ui.anytime ? anytime.map((x) => taskRow(x, t)).join('') : ''}` : ''}
-      ${done.length ? `<button class="fold" data-action="fold" data-k="done" aria-expanded="${ui.done}">${icon('down')}Done <span class="count">${done.length}</span></button>${ui.done ? done.map((x) => taskRow(x, t)).join('') : ''}` : ''}
+      ${!open.length && !anytime.length && !done.length ? '<p class="empty-line py-3">Nothing for today. Type above to add a task.</p>' : ''}
+      ${anytime.length ? `<button class="fold${open.length ? ' border-t border-line' : ''}" data-action="fold" data-k="anytime" aria-expanded="${ui.anytime}">${icon('down')}Anytime <span class="count">${anytime.length}</span></button>${ui.anytime ? anytime.map((x) => taskRow(x, t)).join('') : ''}` : ''}
+      ${done.length ? `<button class="fold${open.length || anytime.length ? ' border-t border-line' : ''}" data-action="fold" data-k="done" aria-expanded="${ui.done}">${icon('down')}Done <span class="count">${done.length}</span></button>${ui.done ? done.map((x) => taskRow(x, t)).join('') : ''}` : ''}
     </section>`
-    + `<section class="card">${sectionH('Habits', D.habits.length ? '<button class="link" data-action="nav" data-to="progress">History</button>' : '')}
-      <div class="habits">${D.habits.sort(byCreated).map((h) => { const on = habitDone(h, t); return `<button class="habit" data-action="habit-toggle" data-id="${h.id}" data-date="${t}" aria-pressed="${on}"><span class="habit-tick">${icon('check')}</span>${esc(h.title)}</button>`; }).join('')}
-        <button class="habit add" data-action="habit-new" aria-label="Add a habit">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`;
+    + `<section class="mt-7">${sectionH('Habits', D.habits.length ? '<button class="link" data-action="nav" data-to="progress">History</button>' : '')}
+      <div class="habits mt-1">${D.habits.sort(byCreated).map((h) => habitChip(h, t)).join('')}
+        <button class="habit add" data-action="habit-new" aria-label="Add a habit">${icon('plus')}${D.habits.length ? '' : 'Add a habit'}</button></div></section>`
+    + fab(t);
 };
 
 A.fold = (el) => { ui[el.dataset.k] = !ui[el.dataset.k]; render(); };
@@ -75,6 +85,13 @@ A['task-toggle'] = async (el) => {
   if (SH.open && $('#goal-steps') && ui.goalOpen) LB.goalDetail(get(ui.goalOpen)); // ticked from inside a goal
   if (!x.done) { haptic(); toast('Done', '', { action: 'Undo', onAction: () => put({ ...get(x.id), ...was }) }); }
 };
+/* Push a task to tomorrow: the swipe left, and the Tomorrow chip's shortcut. */
+async function toTomorrow(x) {
+  const t = today(), tm = addDays(t, 1), was = { date: x.date, moved: x.moved || 0 };
+  await put({ ...x, date: tm, moved: (x.moved || 0) + (isYmd(x.date) && x.date <= t ? 1 : 0) });
+  haptic();
+  toast(`“${trunc(x.title, 28)}” moved to tomorrow`, '', { action: 'Undo', onAction: () => put({ ...get(x.id), ...was }) });
+}
 A['overdue-today'] = async () => {
   const t = today(), list = data().tasks.filter((x) => isOverdue(x, t));
   for (const x of list) await put({ ...x, date: t, moved: (x.moved || 0) + 1 }, { quiet: true });
@@ -84,19 +101,18 @@ A['overdue-today'] = async () => {
 A['task-edit'] = (el) => taskSheet(get(el.dataset.id));
 A['task-new'] = (el) => taskSheet(null, el.dataset.date || '');
 function taskSheet(x, date = '') {
-  const t = today(), r = x || { title: '', date, note: '' };
+  const r = x || { title: '', date, note: '' };
   openSheet({ title: x ? 'Task' : 'New task', body: `<form class="form" data-form="task" data-id="${x ? x.id : ''}">
-    <label class="field"><span>Task</span><input name="title" value="${esc(r.title)}" maxlength="300" required autocomplete="off"></label>
-    <label class="field"><span>Date</span><input type="date" name="date" id="task-date" value="${esc(r.date || '')}"></label>
-    <div class="chips"><button type="button" class="chip" data-action="set-date" data-v="${t}">Today</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 1)}">Tomorrow</button><button type="button" class="chip" data-action="set-date" data-v="${addDays(t, 7)}">Next week</button><button type="button" class="chip" data-action="set-date" data-v="">No date</button></div>
-    ${goalSelect(r.goalId || '')}
-    <label class="field"><span>Note</span><textarea name="note" rows="3" maxlength="4000">${esc(r.note || '')}</textarea></label>
+    <input name="title" class="note-title" value="${esc(r.title)}" maxlength="300" required autocomplete="off" placeholder="What needs doing?" aria-label="Task">
+    <div class="field"><span>When</span>${dayChips('date', r.date || '', { none: true })}</div>
+    ${goalChips(r.goalId || '')}
+    <label class="field"><span>Note</span><textarea name="note" rows="3" maxlength="4000" placeholder="Why, or what you need for it">${esc(r.note || '')}</textarea></label>
     <p class="err" data-form-error></p>
-    <div class="row-end">${x ? `<button type="button" class="btn danger" data-action="delete" data-id="${x.id}">Delete</button>${x.done ? '' : `<button type="button" class="btn" data-action="task-break" data-id="${x.id}">${icon('spark')}Break down</button>`}<span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
+    <div class="sheet-foot">${x ? `<button type="button" class="btn icon-only danger" data-action="delete" data-id="${x.id}" aria-label="Delete task">${icon('trash')}</button>${x.done ? '' : `<button type="button" class="btn" data-action="task-break" data-id="${x.id}"><span class="ai-mark !h-5 !w-5">${icon('spark')}</span>Break down</button>`}` : ''}<span class="spacer"></span><button class="btn primary">Save</button></div></form>`,
+  onMount(root) { root.addEventListener('change', otherDayChanged); } });
 }
-A['set-date'] = (el) => { const f = $('#task-date'); if (f) f.value = el.dataset.v; };
 F.task = async (form, v) => {
-  const title = String(v.title || '').trim(), date = isYmd(v.date) ? v.date : '';
+  const title = String(v.title || '').trim(), date = pickedDay(v, 'date');
   if (!title) throw new Error('Give the task a name.');
   const old = get(form.dataset.id);
   const later = old && isYmd(old.date) && (!date || date > old.date) && old.date <= today(); // pushed back once it was due
@@ -113,26 +129,65 @@ A.delete = async (el) => {
   toast(`${name} deleted`, '', { action: 'Undo', onAction: () => put(r) });
 };
 
+/* Swipe a task row: right ticks it off, left moves it to tomorrow. Touch only; the buttons do the same. */
+(() => {
+  let st = null, swallow = 0;
+  const reset = (row) => { const f = $('.task-face', row), b = $('.task-swipe', row); if (!f) return; f.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)'; f.style.transform = ''; if (b) b.style.opacity = '0'; };
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const row = e.target.closest('.task[data-task]');
+    st = row && $('.task-face', row) && !row.classList.contains('done') && !SH.open ? { row, id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, on: false } : null;
+  }, { passive: true });
+  document.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id) return; // one finger at a time
+    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
+    if (!st.on) { if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { st = null; return; } if (Math.abs(dx) < 14) return; st.on = true; }
+    st.dx = dx;
+    const f = $('.task-face', st.row), b = $('.task-swipe', st.row);
+    f.style.transition = 'none'; f.style.transform = `translateX(${dx}px)`;
+    b.style.opacity = String(clamp(Math.abs(dx) / 90, 0, 1));
+    b.style.background = dx > 0 ? 'rgb(var(--brand))' : 'rgb(var(--warn-bg))';
+    b.style.color = dx > 0 ? 'rgb(var(--on-brand))' : 'rgb(var(--warn))';
+    b.style.justifyContent = dx > 0 ? 'flex-start' : 'flex-end';
+    b.children[0].style.display = dx > 0 ? '' : 'none'; b.children[1].style.display = dx > 0 ? 'none' : '';
+  }, { passive: true });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const { row, dx, on } = st; st = null;
+    if (!on) return;
+    swallow = Date.now();
+    const x = get(row.dataset.task);
+    if (Math.abs(dx) < 90 || !x) { reset(row); return; }
+    const f = $('.task-face', row);
+    f.style.transition = 'transform .2s ease-out'; f.style.transform = `translateX(${dx > 0 ? '100%' : '-100%'})`;
+    setTimeout(() => settle(() => (dx > 0 ? A['task-toggle']({ dataset: { id: x.id } }) : toTomorrow(x))).catch((err) => toast(err.message, 'bad')), 160);
+  };
+  document.addEventListener('pointerup', end, { passive: true });
+  document.addEventListener('pointercancel', () => { if (st) { reset(st.row); st = null; } }, { passive: true });
+  document.addEventListener('click', (e) => { if (Date.now() - swallow < 400 && e.target.closest('.task[data-task]')) { e.stopPropagation(); e.preventDefault(); } }, true); // a swipe is not a tap
+})();
+
 /* ---- Events ---- */
 A['event-edit'] = (el) => eventSheet(get(el.dataset.id));
 A['event-new'] = (el) => eventSheet(null, el.dataset.date || today());
 function eventSheet(e, date = today()) {
   const r = e || { title: '', date, time: '', note: '' };
   openSheet({ title: e ? 'Event' : 'New event', body: `<form class="form" data-form="event" data-id="${e ? e.id : ''}">
-    <label class="field"><span>Event</span><input name="title" value="${esc(r.title)}" maxlength="300" required autocomplete="off"></label>
-    <div class="two"><label class="field"><span>Date</span><input type="date" name="date" value="${esc(r.date)}" required></label>
-      <label class="field"><span>Starts</span><input type="time" name="time" value="${esc(r.time || '')}"></label></div>
-    <label class="field"><span>Ends <small>(optional)</small></span><input type="time" name="end" value="${esc(r.end || '')}"></label>
+    <input name="title" class="note-title" value="${esc(r.title)}" maxlength="300" required autocomplete="off" placeholder="What’s happening?" aria-label="Event">
+    <div class="field"><span>When</span>${dayChips('date', r.date)}</div>
+    <div class="grid grid-cols-2 gap-3"><label class="field"><span>Starts</span><input type="time" name="time" value="${esc(r.time || '')}"></label>
+      <label class="field"><span>Ends <small>(optional)</small></span><input type="time" name="end" value="${esc(r.end || '')}"></label></div>
     <label class="field"><span>Note</span><textarea name="note" rows="2" maxlength="4000">${esc(r.note || '')}</textarea></label>
     <p class="err" data-form-error></p>
-    <div class="row-end">${e ? `<button type="button" class="btn danger" data-action="delete" data-id="${e.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
+    <div class="sheet-foot">${e ? `<button type="button" class="btn icon-only danger" data-action="delete" data-id="${e.id}" aria-label="Delete event">${icon('trash')}</button>` : ''}<span class="spacer"></span><button class="btn primary">Save</button></div></form>`,
+  onMount(root) { root.addEventListener('change', otherDayChanged); } });
 }
 F.event = async (form, v) => {
-  const title = String(v.title || '').trim();
+  const title = String(v.title || '').trim(), date = pickedDay(v, 'date');
   if (!title) throw new Error('Give the event a name.');
-  if (!isYmd(v.date)) throw new Error('Pick a date.');
+  if (!isYmd(date)) throw new Error('Pick a day.');
   const old = get(form.dataset.id);
-  await put({ ...(old || { type: 'event' }), title, date: v.date, time: /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.time : '', end: /^\d{1,2}:\d{2}$/.test(v.end || '') && /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.end : '', note: String(v.note || '').trim() });
+  await put({ ...(old || { type: 'event' }), title, date, time: /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.time : '', end: /^\d{1,2}:\d{2}$/.test(v.end || '') && /^\d{1,2}:\d{2}$/.test(v.time || '') ? v.end : '', note: String(v.note || '').trim() });
   closeSheet();
 };
 
@@ -143,15 +198,16 @@ A['habit-toggle'] = async (el) => {
   const log = { ...(h.log || {}) };
   if (log[d]) delete log[d]; else { log[d] = true; haptic(); }
   await put({ ...h, log });
+  if (SH.open && $('#goal-steps') && ui.goalOpen) LB.goalDetail(get(ui.goalOpen)); // ticked from inside a goal
 };
 A['habit-new'] = () => habitSheet(null);
 A['habit-edit'] = (el) => habitSheet(get(el.dataset.id));
 function habitSheet(h) {
   openSheet({ title: h ? 'Habit' : 'New habit', body: `<form class="form" data-form="habit" data-id="${h ? h.id : ''}">
-    <label class="field"><span>Habit</span><input name="title" value="${esc(h ? h.title : '')}" maxlength="80" required autocomplete="off" placeholder="Walk 20 minutes"></label>
-    ${goalSelect(h ? h.goalId || '' : '')}
+    <input name="title" class="note-title" value="${esc(h ? h.title : '')}" maxlength="80" required autocomplete="off" placeholder="Walk 20 minutes" aria-label="Habit">
+    ${goalChips(h ? h.goalId || '' : '')}
     <p class="err" data-form-error></p>
-    <div class="row-end">${h ? `<button type="button" class="btn danger" data-action="delete" data-id="${h.id}">Delete</button><span class="spacer"></span>` : ''}<button class="btn primary">Save</button></div></form>` });
+    <div class="sheet-foot">${h ? `<button type="button" class="btn icon-only danger" data-action="delete" data-id="${h.id}" aria-label="Delete habit">${icon('trash')}</button>` : ''}<span class="spacer"></span><button class="btn primary">Save</button></div></form>` });
 }
 F.habit = async (form, v) => {
   const title = String(v.title || '').trim();
@@ -160,4 +216,3 @@ F.habit = async (form, v) => {
   await put({ ...(old || { type: 'habit', log: {} }), title, goalId: v.goalId !== undefined ? (get(v.goalId) ? v.goalId : '') : (old && old.goalId) || '' });
   closeSheet();
 };
-

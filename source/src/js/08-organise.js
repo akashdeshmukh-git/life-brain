@@ -72,7 +72,7 @@ A['organise-send'] = async () => {
   const out = $('#org-result'), send = $('#org-send');
   ORG.ctl = new AbortController();
   send.disabled = true;
-  out.innerHTML = '<div class="ai-out"><p class="muted">Reading your note…</p><button class="btn sm" data-action="organise-stop">Stop</button></div>';
+  out.innerHTML = `<div class="ai-out flex items-center justify-between gap-3"><p class="flex items-center gap-2 text-muted"><span class="ai-mark animate-pulse">${icon('spark')}</span>Reading your note…</p><button class="btn sm bg-raised" data-action="organise-stop">Stop</button></div>`;
   try {
     const text = await AI.call(organiseRequest(n), { signal: ORG.ctl.signal, system: ORGANISE_PROMPT });
     ORG.items = parseItems(text);
@@ -107,7 +107,7 @@ function renderOrganised() {
   const n = ORG.items.filter((x) => x.on).length;
   out.innerHTML = ORG.items.length
     ? `<div class="org-list" id="org-list">${ORG.items.map(orgRow).join('')}</div>
-      <div class="row-end"><button class="btn primary" data-action="organise-add" id="org-add" ${n ? '' : 'disabled'}>Add ${n || ''}</button></div>`
+      <div class="sticky-act flex justify-end"><button class="btn primary" data-action="organise-add" id="org-add" ${n ? '' : 'disabled'}>Add ${n || ''}</button></div>`
     : '<div class="ai-out"><p class="muted" id="org-empty">The AI found nothing to turn into tasks, events, habits or goals. That note may be all thoughts, which is fine.</p></div>';
   const send = $('#org-send'); if (send) { send.disabled = false; send.textContent = 'Ask again'; }
 }
