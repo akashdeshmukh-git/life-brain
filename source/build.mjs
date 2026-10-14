@@ -1,12 +1,18 @@
-// Build: concatenate src/js (sorted) and src/style.css into dist/pwa, a self-contained installable web app.
+// Build: concatenate src/js (sorted), compile Tailwind from src/tw.css, and write dist/pwa: one self-contained index.html plus the offline worker and icons.
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
+import { createRequire } from 'node:module';
+const twConfig = createRequire(import.meta.url)('./tailwind.config.js');
 
 const read = (p) => readFileSync(p, 'utf8');
 const b64 = (p) => readFileSync(p).toString('base64');
 const BUILD = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '').replace(/^(\d{8})/, '$1-');
-// Inter (SIL OFL), inlined so the app needs no network for fonts.
-const css = `@font-face { font-family: "Fraunces"; font-weight: 600; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Fraunces-600.woff2')}) format("woff2"); }\n@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Inter-Variable.woff2')}) format("woff2"); }\n` + read('src/style.css');
+// Inter and Bricolage Grotesque (both SIL OFL) are inlined so the app needs no network for fonts.
+// Tailwind is compiled here, from the classes the source actually uses, and inlined too: one file, works offline.
+const fonts = `@font-face { font-family: "Bricolage Grotesque"; font-weight: 200 800; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Bricolage-wght.woff2')}) format("woff2"); }\n@font-face { font-family: "Inter"; font-weight: 100 900; font-style: normal; font-display: swap; src: url(data:font/woff2;base64,${b64('src/fonts/Inter-Variable.woff2')}) format("woff2"); }\n`;
+const css = fonts + (await postcss([tailwindcss(twConfig)]).process(read('src/tw.css'), { from: 'src/tw.css' })).css;
 const body = read('src/body.html');
 const files = readdirSync('src/js').filter((f) => f.endsWith('.js')).sort();
 const LOGO = 'data:image/png;base64,' + b64('src/logo.png');
@@ -27,7 +33,7 @@ writeFileSync('dist/pwa/index.html', `<!doctype html>
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="referrer" content="no-referrer">
 <title>Life Brain</title>
-<meta name="description" content="Tasks, calendar, notes, journal, habits and goals in one simple app. Kept on your phone.">
+<meta name="description" content="Tasks, calendar, notes, habits and goals in one simple app, measured against what you want. Kept on your phone.">
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.png" type="image/png">
@@ -46,4 +52,4 @@ ${body}
 `);
 writeFileSync('dist/pwa/sw.js', read('pwa/sw.js').replace('__BUILD__', BUILD));
 for (const f of ['manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) if (existsSync('pwa/' + f)) copyFileSync('pwa/' + f, 'dist/pwa/' + f);
-console.log('built', BUILD, (js.length / 1024).toFixed(0) + 'KB js');
+console.log('built', BUILD, (js.length / 1024).toFixed(0) + 'KB js', (css.length / 1024).toFixed(0) + 'KB css');

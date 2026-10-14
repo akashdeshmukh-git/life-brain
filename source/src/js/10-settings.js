@@ -7,22 +7,21 @@ VIEWS.settings = (sub) => {
   if (!snapCache) listSnapshots().then((l) => { snapCache = l; if (route.name === 'settings') render(); }).catch(() => { snapCache = []; });
   if (sub === 'ai') setTimeout(() => { const el = $('#ai-card'); if (el) el.scrollIntoView({ block: 'start' }); }, 0);
   const offline = !window.LB_PWA ? '' : LB.swState === 'ready' ? 'Works offline.' : LB.swState === 'error' ? 'Offline mode could not be set up.' : 'Setting up offline mode…';
-  return `<header class="top">${menuBtn()}<div class="top-text"><h1>Settings</h1></div></header>`
-    + `<section class="card">${sectionH('You')}<label class="field"><span>Your name, for Home</span><input id="f-name" data-live="name" value="${esc(st.name || '')}" maxlength="40" autocomplete="given-name" placeholder="Optional"></label></section>`
-    + `<section class="card">${sectionH('Look')}
-      <div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
-      <div class="swatches" role="radiogroup" aria-label="Colour">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-action="set-accent" data-v="${k}" aria-checked="${st.accent === k}" aria-label="${a.name}" title="${a.name}" style="--c:${isDark() ? a.dark : a.light}"></button>`).join('')}</div></section>`
-    + `<section class="card" id="ai-card">${sectionH('AI')}${aiSection()}</section>`
-    + `<section class="card" id="auto-card">${sectionH('Automatic')}${autoSection()}</section>`
-    + `<section class="card">${sectionH('Your data')}
-      <p class="small">Everything stays on this phone. No account, no server. ${offline}</p>
+  const sec = (title, body, id = '') => `<section class="mt-6" ${id ? `id="${id}"` : ''}>${sectionH(title)}<div class="card mt-1 flex flex-col gap-3">${body}</div></section>`;
+  return header('Settings')
+    + sec('You', `<label class="field"><span>Your name, for Home</span><input id="f-name" data-live="name" value="${esc(st.name || '')}" maxlength="40" autocomplete="given-name" placeholder="Optional"></label>`)
+    + sec('Look', `<div class="seg" role="radiogroup" aria-label="Theme">${[['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button role="radio" data-action="set-theme" data-v="${k}" aria-checked="${st.theme === k}">${l}</button>`).join('')}</div>
+      <div class="swatches !mt-1" role="radiogroup" aria-label="Colour">${Object.entries(ACCENTS).map(([k, a]) => `<button class="swatch" role="radio" data-action="set-accent" data-v="${k}" aria-checked="${st.accent === k}" aria-label="${a.name}" title="${a.name}" style="--c:${isDark() ? a.dark : a.light}"></button>`).join('')}</div>`)
+    + sec('AI', aiSection(), 'ai-card')
+    + sec('Automatic', autoSection(), 'auto-card')
+    + sec('Your data', `<p class="small">Everything stays on this phone. No account, no server. ${offline}</p>
       <p class="small" id="backup-status">${S.lastExport ? `Last backup file: ${esc(relDate(S.lastExport.slice(0, 10)))}.` : 'No backup file saved yet.'} ${S.persisted === true ? 'The browser has agreed not to clear this data on its own.' : S.persisted === false ? 'The browser may clear this data if the phone runs low on space, so keep a backup file.' : ''}</p>
-      <div class="chips"><button class="btn" data-action="export">Export backup</button><label class="btn" for="import-file">Import backup</label><input id="import-file" type="file" accept="application/json,.json" data-import hidden></div>
+      <div class="chips"><button class="btn" data-action="export">Export backup</button><label class="btn cursor-pointer" for="import-file">Import backup</label><input id="import-file" type="file" accept="application/json,.json" data-import hidden></div>
       <details class="more"><summary>Backups on this phone</summary>
-        ${snapCache == null ? '<p class="small muted">Loading…</p>' : snapCache.length ? snapCache.map((s) => `<div class="srow"><span><b>${esc(new Date(s.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}</b><small>${esc(s.reason)} · ${plural(s.count, 'item')}</small></span><button class="btn sm" data-action="snap-restore" data-id="${s.id}">Restore</button></div>`).join('') : '<p class="small muted">One is made each day you open the app.</p>'}
-        <p class="small muted">These sit in the same storage as your data. Export now and then to keep a copy somewhere else.</p></details>
-      <button class="btn danger block" data-action="wipe">Delete everything</button></section>`
-    + `<p class="about"><img src="${LB.LOGO}" alt="" width="28" height="28">Life Brain · ${esc(LB.BUILD || 'dev')}</p>`;
+        ${snapCache == null ? '<p class="small">Loading…</p>' : snapCache.length ? snapCache.map((s) => `<div class="srow"><span><b>${esc(new Date(s.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}</b><small class="text-muted">${esc(s.reason)}, ${plural(s.count, 'item')}</small></span><button class="btn sm" data-action="snap-restore" data-id="${s.id}">Restore</button></div>`).join('') : '<p class="small">One is made each day you open the app.</p>'}
+        <p class="small mt-2">These sit in the same storage as your data. Export now and then to keep a copy somewhere else.</p></details>
+      <button class="btn danger w-full" data-action="wipe">Delete everything</button>`)
+    + `<p class="about mt-8 flex items-center justify-center gap-2 text-sm text-muted"><img src="${LB.LOGO}" alt="" width="24" height="24" class="rounded-md">Life Brain, version ${esc(LB.BUILD || 'dev')}</p>`;
 };
 document.addEventListener('change', (ev) => { if (ev.target.dataset && ev.target.dataset.live === 'name') saveSettings({ name: ev.target.value.trim() }).then(() => toast('Saved')).catch((e) => toast(e.message, 'bad')); });
 A['set-theme'] = async (el) => { await saveSettings({ theme: el.dataset.v }); applyTheme(); };
@@ -32,25 +31,25 @@ A['set-accent'] = async (el) => { if (ACCENTS[el.dataset.v]) { await saveSetting
 function aiSection() {
   const ai = S.settings.ai, active = AI.provider(), conns = connected();
   const lost = (ai.linked || []).filter((p) => PROVIDERS[p] && !conns.includes(p));
-  return `${conns.length ? conns.map((p) => connCard(p, active)).join('') : '<p class="small muted">Paste any API key. The app works out which service it is for.</p>'}
-    ${lost.length ? `<p class="small muted">Paste the key again for ${esc(lost.map((p) => PROVIDERS[p].name).join(', '))}. Keys are forgotten when the app closes unless you keep them on this phone.</p>` : ''}
+  return `${conns.length ? `<div>${conns.map((p) => connCard(p, active)).join('')}</div>` : '<p class="small">Paste any API key. The app works out which service it is for.</p>'}
+    ${lost.length ? `<p class="small">Paste the key again for ${esc(lost.map((p) => PROVIDERS[p].name).join(', '))}. Keys are forgotten when the app closes unless you keep them on this phone.</p>` : ''}
     <form class="form" data-form="ai-connect">
-      <label class="field"><span>${conns.length ? 'Add another key' : 'API key'}</span><input id="f-aikey" name="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-or-…  sk-ant-…  AIza…  gsk_…" maxlength="400" data-live="ai-key"><small id="ai-detect"></small></label>
-      <details class="more"><summary>Service and address</summary>
+      <label class="field"><span>${conns.length ? 'Add another key' : 'API key'}</span><input id="f-aikey" name="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-or-…  sk-ant-…  AIza…  gsk_…" maxlength="400" data-live="ai-key"><small id="ai-detect" class="text-[13px] text-muted"></small></label>
+      <details class="more"><summary>Service and address</summary><div class="flex flex-col gap-3">
         <label class="field"><span>Service</span><select id="f-aiprov" name="provider"><option value="">Work it out from the key</option>${Object.entries(PROVIDERS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select></label>
-        <label class="field"><span>Address</span><input name="base" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Leave empty for the usual one" maxlength="300"></label></details>
+        <label class="field"><span>Address</span><input name="base" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Leave empty for the usual one" maxlength="300"></label></div></details>
       <p class="err" data-form-error></p>
-      <button class="btn primary block">Connect</button></form>
+      <button class="btn primary w-full">Connect</button></form>
     <label class="check"><input type="checkbox" data-action="ai-remember" ${ai.rememberKeys ? 'checked' : ''}> Keep keys on this phone</label>
-    <p class="small muted">Otherwise you paste the key again after closing the app. A kept key can be read by anyone with this phone, so use one with a spending limit. Keys are never in backups.</p>`;
+    <p class="small -mt-2">Otherwise you paste the key again after closing the app. A kept key can be read by anyone with this phone, so use one with a spending limit. Keys are never in backups.</p>`;
 }
 function connCard(p, active) {
   const models = AIX.models[p], st = aiStatus[p], P = PROVIDERS[p];
-  return `<div class="conn${active === p ? ' on' : ''}" data-conn="${p}"><div class="conn-top"><button class="radio-btn" data-action="ai-use" data-p="${p}" role="radio" aria-checked="${active === p}" aria-label="Use ${esc(P.name)}"></button><b>${esc(P.name)}</b><span class="muted small">${S.aiKeys[p] ? '••••' + esc(S.aiKeys[p].slice(-4)) : ''}</span></div>
+  return `<div class="conn${active === p ? ' on' : ''}" data-conn="${p}"><div class="conn-top"><button class="radio-btn" data-action="ai-use" data-p="${p}" role="radio" aria-checked="${active === p}" aria-label="Use ${esc(P.name)}"></button><b class="flex-1 font-semibold">${esc(P.name)}</b><span class="small">${S.aiKeys[p] ? '••••' + esc(S.aiKeys[p].slice(-4)) : ''}</span></div>
     <label class="field"><span>Model</span><input list="models-${p}" value="${esc(provModel(p))}" data-model-for="${p}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type a model name">
       <datalist id="models-${p}">${(models || []).map((m) => `<option value="${esc(m.id)}">${esc(m.free ? 'free' : '')}</option>`).join('')}</datalist></label>
-    ${st ? `<p class="small ${st.ok ? 'ok' : 'err'}" data-status="${p}">${esc(st.text)}</p>` : ''}
-    <div class="chips"><button class="btn sm" data-action="ai-check" data-p="${p}">Check key</button><button class="btn sm danger" data-action="ai-remove" data-p="${p}">Remove</button></div></div>`;
+    ${st ? `<p class="small mt-2 ${st.ok ? '!text-good' : '!text-bad'}" data-status="${p}">${esc(st.text)}</p>` : ''}
+    <div class="chips mt-3"><button class="btn sm bg-raised" data-action="ai-check" data-p="${p}">Check key</button><button class="btn sm danger bg-raised" data-action="ai-remove" data-p="${p}">Remove</button></div></div>`;
 }
 document.addEventListener('input', (ev) => {
   if (ev.target.dataset.live !== 'ai-key') return;
@@ -153,9 +152,9 @@ function importPreview(v) {
   pendingImport = v;
   openSheet({ title: 'Import backup', body: v.ok
     ? `<p>${Object.entries(v.counts).map(([k, n]) => `${n} ${NAMES[k]}`).join(', ') || 'Nothing in it.'}</p>
-      <p class="small muted"><b>Add</b> keeps what you have and adds these. <b>Replace</b> clears everything first. A backup of what you have now is made either way.</p>
-      <div class="row-end"><button class="btn" data-action="import-go" data-mode="replace">Replace</button><button class="btn primary" data-action="import-go" data-mode="merge">Add</button></div>`
-    : `<p class="err">${v.errors.map(esc).join('<br>')}</p><div class="row-end"><button class="btn" data-action="sheet-close">Close</button></div>` });
+      <p class="small mt-2"><b>Add</b> keeps what you have and adds these. <b>Replace</b> clears everything first. A backup of what you have now is made either way.</p>
+      <div class="sheet-foot justify-end"><button class="btn" data-action="import-go" data-mode="replace">Replace</button><button class="btn primary" data-action="import-go" data-mode="merge">Add</button></div>`
+    : `<p class="err">${v.errors.map(esc).join('<br>')}</p><div class="sheet-foot justify-end"><button class="btn" data-action="sheet-close">Close</button></div>` });
 }
 LB.importPreview = importPreview;
 A['import-go'] = async (el) => {
@@ -190,13 +189,13 @@ A.intro = () => {
   const row = (ic, name, text) => `<li><span class="nav-ic">${icon(ic)}</span><span><b>${name}</b><br>${text}</span></li>`;
   openSheet({ title: 'How Life Brain works', body: `<ul class="intro">
       ${row('home', 'Home', 'Open the app here. It shows what’s on today, where your days are heading compared with your goals, and fixes you can apply in one tap.')}
-      ${row('today', 'Today', 'Type a task and press Enter. Tap the circle when it’s done. End with “tomorrow” or “friday” to plan ahead.')}
+      ${row('today', 'Today', 'Type a task and press Enter. Tap the circle when it’s done, or swipe a task right. Swipe left to move it to tomorrow.')}
       ${row('calendar', 'Calendar', 'Tap a day to see it, or add a task, event or note to it.')}
       ${row('goal', 'Goals', 'Say what you want. Tie tasks and habits to it, and Home shows whether your days are heading there.')}
       ${row('notes', 'Notes', 'Write down the why. Tap Organise to turn a brain dump into tasks.')}
       ${row('progress', 'Progress', 'Your week in numbers, habits to keep, and what you might be missing.')}
     </ul>
-    <p class="small">Everything is in the menu <b>☰</b> at the top left. Buttons marked ✦ use your AI. Nothing changes until you tap, and Undo takes it back.</p>
-    <div class="row-end"><button class="btn primary" data-action="intro-done">Got it</button></div>` });
+    <p class="small mt-3">Everything is in the menu <b>☰</b> at the top left, and <b>+</b> adds anything from anywhere. Buttons with the colourful ✦ use your AI. Nothing changes until you tap, and Undo takes it back.</p>
+    <div class="sheet-foot justify-end"><button class="btn primary" data-action="intro-done">Got it</button></div>` });
 };
 A['intro-done'] = async () => { closeSheet(); if (!S.settings.introSeen) await saveSettings({ introSeen: true }); };

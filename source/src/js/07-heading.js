@@ -1,24 +1,25 @@
 /* ===== Where you're heading, and fixes. The brain part of Life Brain: it compares what you do with what you
    said you want, and turns what it sees into one-tap changes. Worked out on the phone, from your own records. ===== */
-const HEAD_COLORS = ['var(--accent)', 'var(--text)', '#8a7a52', '#5f7f68', '#7a6a96'];
+const HEAD_COLORS = ['rgb(var(--brand))', 'rgb(var(--ink))', '#cb53fa', '#14a38b', '#f59e0b'];
 function headingSection(D, t) {
   const act = activeGoals(D);
   if (!D.goals.length) {
-    return `<section class="heading" id="heading"><h2>Where you’re heading</h2>
-      <p class="heading-line">Tell your brain what you want. With a goal or two, Home shows whether your days are heading there, and suggests fixes when they aren’t.</p>
-      <button class="btn primary" data-action="goal-new">${icon('plus')}Add a goal</button></section>`;
+    return `<section class="card mt-7" id="heading"><h2 class="font-display text-[19px] font-semibold tracking-tight">Where you’re heading</h2>
+      <p class="heading-line mt-1 text-[15px] text-muted">Tell your brain what you want. With a goal or two, Home shows whether your days are heading there, and suggests fixes when they aren’t.</p>
+      <button class="btn primary mt-4" data-action="goal-new">${icon('plus')}Add a goal</button></section>`;
   }
   const dir = direction(D, t), parts = dir.parts.filter((p) => !goalDone(p.g) || p.n).slice(0, 5);
   const color = (i) => HEAD_COLORS[i % HEAD_COLORS.length];
-  const bar = dir.total ? `<div class="hbar" role="img" aria-label="${esc(parts.map((p) => `${p.g.title}: ${p.n}`).concat(`No goal: ${dir.none}`).join(', '))}">${parts.filter((p) => p.n).map((p) => `<i style="width:${(p.n / dir.total) * 100}%;background:${color(parts.indexOf(p))}"></i>`).join('')}${dir.none ? `<i class="none" style="width:${(dir.none / dir.total) * 100}%"></i>` : ''}</div>` : '';
-  const rows = act.slice(0, 5).map((g) => {
+  const bar = dir.total ? `<div class="hbar mt-4" role="img" aria-label="${esc(parts.map((p) => `${p.g.title}: ${p.n}`).concat(`No goal: ${dir.none}`).join(', '))}">${parts.filter((p) => p.n).map((p) => `<i style="width:${(p.n / dir.total) * 100}%;background:${color(parts.indexOf(p))}"></i>`).join('')}${dir.none ? `<i class="none" style="width:${(dir.none / dir.total) * 100}%"></i>` : ''}</div>` : '';
+  const rows = act.slice(0, 3).map((g) => {
     const s = goalStatus(D, g, t), i = parts.findIndex((p) => p.g.id === g.id), n = i >= 0 ? parts[i].n : 0;
-    return `<li><button class="hrow-goal" data-action="goal-open" data-id="${g.id}"><span class="hdot" style="background:${i >= 0 && n ? color(i) : 'var(--line)'}"></span><span class="hname"><b>${esc(g.title)}</b><small class="state-${s.state}">${esc(goalStateText(g, s))}</small></span><span class="hnum">${n}</span></button></li>`;
+    return `<li><button class="hrow-goal" data-action="goal-open" data-id="${g.id}"><span class="hdot" style="background:${i >= 0 && n ? color(i) : 'rgb(var(--line))'}"></span><span class="hname"><b>${esc(g.title)}</b><small class="state-${s.state}">${esc(goalStateText(g, s))}</small></span><span class="hnum">${n}</span></button></li>`;
   }).join('');
-  return `<section class="heading" id="heading"><div class="sec-h"><h2>Where you’re heading</h2><button class="link" data-action="goal-new">${icon('plus')}Goal</button></div>
-    <p class="heading-line" id="heading-line">${esc(headingLine(D, t))}</p>
-    ${bar}${dir.total ? `<p class="small">Tasks finished in the last 4 weeks, by goal.</p>` : ''}
-    <ol class="hlist">${rows}${dir.total ? `<li><div class="hrow-goal"><span class="hdot none"></span><span class="hname"><b>No goal</b><small>Tasks not tied to any goal</small></span><span class="hnum">${dir.none}</span></div></li>` : ''}</ol></section>`;
+  return `<section class="card mt-7" id="heading"><div class="flex items-center justify-between gap-2"><h2 class="font-display text-[19px] font-semibold tracking-tight">Where you’re heading</h2><button class="link -my-2" data-action="goal-new">${icon('plus')}Goal</button></div>
+    <p class="heading-line mt-1 font-display text-[18px] leading-snug" id="heading-line">${esc(headingLine(D, t))}</p>
+    ${bar}${dir.total ? '<p class="mt-2 text-[13px] text-muted">Tasks finished in the last 4 weeks, by goal</p>' : ''}
+    <ol class="hlist mt-2">${rows}${dir.total ? `<li><div class="hrow-goal"><span class="hdot none"></span><span class="hname"><b>No goal</b><small>Tasks not tied to any goal</small></span><span class="hnum">${dir.none}</span></div></li>` : ''}</ol>
+    ${act.length > 3 ? `<button class="link" data-action="nav" data-to="goals">All ${act.length} goals</button>` : ''}</section>`;
 }
 
 /* ---- Fixes: specific changes, each one tap with Undo, or a ✦ that asks your AI to do the thinking ---- */
@@ -45,15 +46,28 @@ function computeFixes(D, t) {
   // Work that isn't tied to anything you said you want
   const loose = D.tasks.filter((x) => !x.done && !x.goalId), act = activeGoals(D);
   if (hasAI && act.length && loose.length >= 3) out.push({ id: 'link-' + t, title: `${plural(loose.length, 'open task')} aren’t tied to a goal`, text: 'Tie them, and Where you’re heading becomes accurate.', label: '✦ Tie to goals', run: () => A['goal-link']() });
-  return out.filter((f) => !(snooze[f.id] && snooze[f.id] >= t)).slice(0, 4);
+  // Sunday or Monday: the weekly look back, once a week, when the AI is set up
+  const wd = parseYmd(t).getDay(), lb = S.settings.lookBack;
+  // Sunday and Monday share one id (Monday's date), so Not now holds for both days
+  if ((wd === 0 || wd === 1) && hasAI && S.records.size >= 10 && (!lb || lb < addDays(t, -5))) out.push({ id: 'lookback-' + (wd === 0 ? addDays(t, 1) : t), title: 'Weekly look back', text: 'A short look at what got done and what slipped this week, written by your AI.', label: '✦ Write it', run: () => A['look-back']() });
+  // Everything lives only on this phone, so a backup file is the one safety net against a cleared browser
+  const last = S.lastExport ? daysBetween(S.lastExport.slice(0, 10), t) : null;
+  if (S.records.size >= 15 && (last == null || last >= 30)) out.push({ id: 'backup', title: 'Save a backup file', text: `Everything lives only on this phone. ${last == null ? 'No backup file has been saved yet.' : `The last one was saved ${last} days ago.`}`, label: 'Save backup', run: () => A.export() });
+  return out.filter((f) => !(snooze[f.id] && snooze[f.id] >= t)).slice(0, 5);
 }
+/* Fixes sit side by side: swipe through them. Suggestions your AI prepared by itself come first. */
 function fixesSection(D, t) {
   const pend = pendingItems(), fixes = computeFixes(D, t);
   FIXES.clear(); fixes.forEach((f) => FIXES.set(f.id, f));
-  if (!pend.length && !fixes.length) return '';
-  return `<section class="blist fixes" id="fixes"><h2>Fixes for you</h2><ol>
-    ${pend.map(briefItem).join('')}
-    ${fixes.map((f) => `<li data-fix="${esc(f.id)}"><b class="fix-title">${esc(f.title)}</b><p>${esc(f.text)}</p><div class="fix-btns"><button class="btn sm primary" data-action="fix-apply" data-fix="${esc(f.id)}">${esc(f.label)}</button><button class="link" data-action="fix-dismiss" data-fix="${esc(f.id)}">Not now</button></div></li>`).join('')}</ol></section>`;
+  const n = pend.length + fixes.length;
+  if (!n) return '';
+  const mark = `<span class="ai-mark">${icon('spark')}</span>`;
+  const card = (title, text, btns, attrs = '', ai = false) => `<div class="fix-card" ${attrs}><div class="flex items-start gap-2">${ai ? mark : ''}<div class="fix-title min-w-0 flex-1">${title}</div></div><p class="fix-text">${text}</p><div class="fix-btns">${btns}</div></div>`;
+  return `<section class="mt-7" id="fixes"><div class="sec-h"><h2>Fixes for you</h2>${n > 1 ? `<span class="text-sm text-muted">Swipe for ${n - 1} more</span>` : ''}</div>
+    <div class="fix-strip mt-1">
+    ${pend.map((it) => card(`<button class="bi-title text-left font-semibold" ${it.attrs}>${esc(it.title.replace(/^✦\s*/, ''))}</button>`, it.text, `<button class="btn sm primary" ${it.attrs}>Open</button><button class="btn sm ghost text-muted" data-action="pending-dismiss" ${it.attrs.match(/data-id="[^"]*"/)[0]}>Not now</button>`, '', true)).join('')}
+    ${fixes.map((f) => card(esc(f.title), esc(f.text), `<button class="btn sm primary" data-action="fix-apply" data-fix="${esc(f.id)}">${esc(f.label)}</button><button class="btn sm ghost text-muted" data-action="fix-dismiss" data-fix="${esc(f.id)}">Not now</button>`, `data-fix="${esc(f.id)}"`, f.label.startsWith('✦'))).join('')}
+    </div></section>`;
 }
 A['fix-apply'] = async (el) => {
   const f = FIXES.get(el.dataset.fix);

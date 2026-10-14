@@ -1,22 +1,24 @@
-/* ===== UI core: theme, tabs, screens, taps, sheets, toasts ===== */
-/* One colour for ticks, the current tab and buttons. light/dark: the colour on white and on black. */
+/* ===== UI core: theme, screens, taps, sheets, toasts ===== */
+/* One accent colour for ticks, the current screen and the main buttons. light/dark: on white and on black. */
 const ACCENTS = {
-  clay: { name: 'Clay', light: '#b5532f', dark: '#e07a52' }, // light values pass 4.5:1 on paper and under white text
+  violet: { name: 'Violet', light: '#6a3df0', dark: '#a88bff' }, // from the logo; both pass 4.5:1 for text and under button text
   blue: { name: 'Blue', light: '#1967d2', dark: '#8ab4f8' },
   green: { name: 'Green', light: '#188038', dark: '#81c995' },
-  purple: { name: 'Purple', light: '#9334e6', dark: '#c58af9' },
+  clay: { name: 'Clay', light: '#b5532f', dark: '#e07a52' },
   red: { name: 'Red', light: '#c5221f', dark: '#f28b82' },
   orange: { name: 'Orange', light: '#a85600', dark: '#fcad70' },
   yellow: { name: 'Yellow', light: '#856a00', dark: '#fdd663' },
 };
 LB.ACCENTS = ACCENTS;
+const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(' '); // "#6a3df0" → "106 61 240", for Tailwind's rgb(var(--brand) / a)
 const isDark = () => S.settings.theme === 'dark' || (S.settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
 function applyTheme() {
-  const root = document.documentElement, dark = isDark(), a = ACCENTS[S.settings.accent] || ACCENTS.clay;
+  const root = document.documentElement, dark = isDark(), a = ACCENTS[S.settings.accent] || ACCENTS.violet;
   root.dataset.theme = dark ? 'dark' : 'light';
-  root.style.setProperty('--accent', dark ? a.dark : a.light);
+  root.style.setProperty('--brand', channels(dark ? a.dark : a.light));
+  root.style.setProperty('--accent', dark ? a.dark : a.light); // the plain hex, for the few places that need it
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = dark ? '#0b0b0a' : '#f9f9f7';
+  if (meta) meta.content = dark ? '#000000' : '#faf8ff';
 }
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (_) {}
 
@@ -52,9 +54,9 @@ const navItem = (n, cur) => `<button class="nav-item" data-action="nav" data-to=
 function renderNav() {
   const cur = route.name;
   $('#drawer').innerHTML = `<div class="drawer-scrim" data-action="menu-close"></div>
-    <nav class="drawer-panel" aria-label="Menu" tabindex="-1"><div class="drawer-brand"><img src="${LB.LOGO}" alt="" width="36" height="36"><span>Life Brain</span></div>
-      <div class="drawer-list">${TABS.map((n) => navItem(n, cur)).join('')}</div>
-      <div class="drawer-foot"><button class="nav-item" data-action="intro"><span class="nav-ic">${icon('help')}</span><span class="nav-text"><b>How it works</b></span></button>
+    <nav class="drawer-panel" aria-label="Menu" tabindex="-1"><div class="mb-4 flex items-center gap-3 px-3"><img src="${LB.LOGO}" alt="" width="40" height="40" class="rounded-xl"><span class="font-display text-[22px] font-semibold tracking-tight">Life Brain</span></div>
+      <div class="flex flex-col gap-0.5">${TABS.map((n) => navItem(n, cur)).join('')}</div>
+      <div class="mt-auto flex flex-col gap-0.5 border-t border-line pt-3"><button class="nav-item" data-action="intro"><span class="nav-ic">${icon('help')}</span><span class="nav-text"><b>How it works</b></span></button>
         ${navItem({ id: 'settings', label: 'Settings', icon: 'gear', hint: 'Look, AI key, backups' }, cur)}</div></nav>`;
   $('#drawer').setAttribute('aria-hidden', String(!document.documentElement.classList.contains('menu-open')));
 }
@@ -73,10 +75,12 @@ function closeMenu() {
   if (menuFocus && document.contains(menuFocus)) menuFocus.focus({ preventScroll: true });
 }
 LB.openMenu = openMenu;
-const menuBtn = () => `<button class="icon-btn menu-btn" data-action="menu" aria-label="Open menu">${icon('menu')}</button>`;
+const menuBtn = () => `<button class="icon-btn menu-btn text-ink" data-action="menu" aria-label="Open menu">${icon('menu')}</button>`;
 /* The top of every screen: menu on the left, big title, a small line under it, the screen's own buttons on the right. */
-const header = (title, sub = '', right = '') => `<header class="top">${menuBtn()}<div class="top-text"><h1>${esc(title)}</h1>${sub ? `<p class="top-sub">${sub}</p>` : ''}</div>
-  ${right ? `<div class="top-right">${right}</div>` : ''}</header>`;
+const header = (title, sub = '', right = '') => `<header class="top">${menuBtn()}<div class="min-w-0 flex-1"><h1>${esc(title)}</h1>${sub ? `<p class="top-sub">${sub}</p>` : ''}</div>
+  ${right ? `<div class="flex shrink-0 items-center gap-1">${right}</div>` : ''}</header>`;
+/* The + button: adds a task, event, note, habit or goal from anywhere, in one sheet. */
+const fab = (date = '') => `<button class="fab" data-action="quick-add" ${date ? `data-date="${date}"` : ''} aria-label="Add">${icon('plus')}</button>`;
 let lastKey = '';
 function render(focus) {
   applyTheme();
@@ -91,7 +95,7 @@ function render(focus) {
   const typed = key === lastKey ? $$('input[id]:not([type=checkbox]):not([type=file]):not([type=radio]), textarea[id]', view).map((el) => [el.id, el.value]) : [];
   try { view.innerHTML = warn + VIEWS[route.name](route.sub);
     for (const [id, v] of typed) { const el = $('#' + CSS.escape(id), view); if (el && !el.value && v) { el.value = v; if (el.dataset.live === 'ai-key') el.dispatchEvent(new Event('input', { bubbles: true })); } } $$('form', view).forEach((f) => (f.noValidate = true)); }
-  catch (e) { console.error(e); view.innerHTML = `<div class="empty">This screen hit an error. Your data is safe.<br><small>${esc(e.message)}</small></div>`; }
+  catch (e) { console.error(e); view.innerHTML = `<div class="py-16 text-center text-muted">This screen hit an error. Your data is safe.<br><small>${esc(e.message)}</small></div>`; }
   lastKey = key;
   window.scrollTo(0, keep);
   const back = activeId && $('#' + CSS.escape(activeId), view);
@@ -197,12 +201,12 @@ function sheetApply(x) {
     SH.scrim.style.opacity = clamp(1 - x / SH.h, 0, 1);
   }
 }
-function focusFirstIn(sheet) {
-  // On touch screens, don't pop the keyboard up uninvited; focus the title for screen readers instead.
-  const first = !coarse() && $('.sheet-body input:not([type=hidden]):not([type=checkbox]):not([readonly]), .sheet-body textarea:not([readonly]), .sheet-body select', sheet);
+function focusFirstIn(sheet, want) {
+  // On touch screens, don't pop the keyboard up uninvited (unless typing is the point, as in Add); focus the title for screen readers instead.
+  const first = (want && $(want, sheet)) || (!coarse() && $('.sheet-body input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=date]):not([readonly]), .sheet-body textarea:not([readonly]), .sheet-body select', sheet));
   (first || $('.sheet-head h2', sheet)).focus({ preventScroll: true });
 }
-function openSheet({ title, body, onMount, wide }) {
+function openSheet({ title, body, onMount, wide, focus }) {
   if (SH.open && !SH.closing && SH.sheet) { // already up: change the content in place, keep position
     $('.sheet-head h2', SH.sheet).textContent = title;
     SH.wrap.setAttribute('aria-label', title);
@@ -210,7 +214,7 @@ function openSheet({ title, body, onMount, wide }) {
     $('.sheet-body', SH.sheet).innerHTML = body;
     noNativeValidation(SH.sheet);
     if (onMount) onMount(SH.sheet);
-    focusFirstIn(SH.sheet);
+    focusFirstIn(SH.sheet, focus);
     return SH.sheet;
   }
   cancelAnimationFrame(SH.raf);
@@ -236,7 +240,7 @@ function openSheet({ title, body, onMount, wide }) {
     springTo(SH, 0, { damping: 1, response: 0.35 }, sheetApply);
     bindSheetDrag();
   }
-  focusFirstIn(SH.sheet);
+  focusFirstIn(SH.sheet, focus);
   return SH.sheet;
 }
 function closeSheet(velocity = 0) {
@@ -303,25 +307,15 @@ document.addEventListener('keydown', (ev) => {
 
 
 const noNativeValidation = (root) => $$('form', root).forEach((f) => (f.noValidate = true));
-document.addEventListener('keydown', (ev) => {
-  if (!SH.open || !SH.sheet) return;
-  if (ev.key === 'Escape') { closeSheet(); return; }
-  if (ev.key !== 'Tab') return; // keep keyboard focus inside the sheet
-  const f = $$('button, [href], input, select, textarea, summary', SH.sheet).filter((el) => !el.disabled && el.offsetParent !== null);
-  if (!f.length) return;
-  const first = f[0], last = f[f.length - 1];
-  if (ev.shiftKey && (document.activeElement === first || !SH.sheet.contains(document.activeElement))) { last.focus(); ev.preventDefault(); }
-  else if (!ev.shiftKey && document.activeElement === last) { first.focus(); ev.preventDefault(); }
-});
 /* In-page confirmation (native confirm() is unavailable in some hosts). */
 function confirmSheet({ title, text, confirmLabel = 'Confirm', danger = false, requireText = '' }) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (v) => { if (!done) { done = true; resolve(v); } };
-    openSheet({ title, body: `<form class="form" data-form="confirm"><p>${text}</p>
+    openSheet({ title, body: `<form class="form" data-form="confirm"><p class="text-[15px] text-muted">${text}</p>
       ${requireText ? `<label class="field"><span>Type ${esc(requireText)} to confirm</span><input name="confirm" autocomplete="off" autocapitalize="characters"></label>` : ''}
       <p class="err" data-form-error></p>
-      <div class="row-end"><button type="button" class="btn" data-action="sheet-close">Cancel</button><button class="btn ${danger ? 'danger solid' : 'primary'}">${esc(confirmLabel)}</button></div></form>`,
+      <div class="sheet-foot justify-end"><button type="button" class="btn" data-action="sheet-close">Cancel</button><button class="btn ${danger ? 'danger solid' : 'primary'}">${esc(confirmLabel)}</button></div></form>`,
     onMount(root) {
       F.confirm = (form, v) => {
         if (requireText && String(v.confirm || '').trim().toUpperCase() !== requireText) throw new Error(`Type ${requireText} exactly to continue.`);

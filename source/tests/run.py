@@ -147,10 +147,11 @@ def _(pg, ctx):
     check(ev(pg, '() => LB.route.name') == 'home', 'should start on Home')
     check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
     check(pg.inner_text('.headline').startswith('The whole day is yours'), pg.inner_text('.headline'))
-    check('Nothing needs you' in pg.inner_text('.brief-bottom'), 'calm line missing')
+    check('Nothing due today' in pg.inner_text('#home-today'), 'calm line missing')
     check('Tell your brain what you want' in pg.inner_text('#heading') and count(pg, '#heading [data-action=goal-new]') == 1, 'Home should invite a first goal')
     check(count(pg, '.terrain .ridge') == 1 and count(pg, '.terrain .now') <= 1, 'drawing')
-    check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '() => document.fonts.check("600 30px Fraunces")'), 'serif headline font')
+    check('Bricolage Grotesque' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '''() => document.fonts.check("600 32px 'Bricolage Grotesque'")'''), 'display headline font')
+    check(count(pg, '.fab[data-action=quick-add]') == 1, 'the + button')
 
 @test('Start', 'The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it')
 def _(pg, ctx):
@@ -187,33 +188,38 @@ def _(pg, ctx):
     check(pg.locator('.top h1').inner_text() == 'Today' and count(pg, '#add-today') == 1, 'today')
     check('Nothing for today' in pg.inner_text('main'), 'empty hint missing')
 
-@test('Home', 'Brief: headline with your name, the day as a line with one dot per event, three acts, what needs you and what is done')
+@test('Home', 'Brief: headline with your name, the day as a line, today’s events as chips, tasks and habits ticked in place, coming up, already done')
 def _(pg, ctx):
     open_app(pg, '')
     ev(pg, """async () => { const t = today(), y = addDays(t,-1);
       await saveSettings({name:'Akash'});
       await put({type:'event', title:'Standup', date:t, time:'09:30', end:'10:00'});
       await put({type:'event', title:'Lunch', date:t, time:'13:00', end:'14:30'});
+      await put({type:'event', title:'Late talk', date:t, time:'17:00', end:'18:00'});
       await put({type:'event', title:'Supervisor call', date:addDays(t,1), time:'11:00', note:'Bring plots'});
-      await put({type:'task', title:'Old reply', date:addDays(t,-2), done:false, moved:3});
-      await put({type:'task', title:'Chapter 3', date:t, done:false});
+      await put({id:'old', type:'task', title:'Old reply', date:addDays(t,-2), done:false, moved:3});
+      await put({id:'ch3', type:'task', title:'Chapter 3', date:t, done:false});
       await put({type:'task', title:'Done thing', date:y, done:true, doneDate:y});
-      const log={}; for (let i=1;i<=4;i++) log[addDays(t,-i)]=true; await put({type:'habit', title:'Walk', log});
+      const log={}; for (let i=1;i<=4;i++) log[addDays(t,-i)]=true; await put({id:'walk', type:'habit', title:'Walk', log});
       const d=new Date(); d.setHours(15,0,0,0); LB.now=()=>new Date(d); LB.render(); }""")
     pg.wait_for_timeout(150)
     h = pg.inner_text('.headline')
-    check('Akash' in h and 'Two things on the calendar' in h, h)
-    check(count(pg, '.terrain .dot, .terrain .hollow') == 2, 'one dot per timed event')
-    acts = pg.locator('.act').all_inner_texts()
-    check(len(acts) == 3 and 'Standup at 9:30' in acts[0] and 'Lunch at 1:00' in acts[1], acts)
-    check(count(pg, '.act.past') == 1, 'the morning has passed at 3 PM')
-    need = pg.inner_text('.blist.need')
-    for want in ['Old reply', 'Was due', 'moved 3 times', 'Chapter 3', 'Supervisor call', 'Tomorrow at 11', 'Bring plots', 'Walk', 'Done 4 of the last 7 days']:
-        check(want in need, f'needs attention missing {want}:\n{need}')
-    done = pg.inner_text('.blist.done')
+    check('Akash' in h and 'Three things on the calendar' in h, h)
+    check(count(pg, '.terrain .dot, .terrain .hollow') == 3 and count(pg, '.terrain .now') == 1, 'one dot per timed event, and now')
+    chips = pg.locator('.ev-chip').all_inner_texts()
+    check(len(chips) == 3 and 'Standup' in chips[0] and '9:30' in chips[0] and count(pg, '.ev-chip.past') == 2, chips)
+    check(pg.eval_on_selector_all('.brief > section', 'els => els.map(e => e.id)')[:1] == ['heading'], 'where you are heading comes first')
+    td = pg.inner_text('#home-today')
+    check('Old reply' in td and 'Due ' in td and 'Chapter 3' in td and 'Walk' in td and td.index('Old reply') < td.index('Chapter 3'), td)
+    soon = pg.inner_text('#coming-up')
+    check('Supervisor call' in soon and '11:00' in soon and 'Bring plots' in soon, soon)
+    done = pg.inner_text('#home-done')
     check('1 task done yesterday' in done and '“Done thing”' in done and 'kept yesterday' in done, done)
-    check('moved 4' not in pg.inner_text('.brief') and count(pg, '.blist.know') == 0, 'pattern repeated an item already listed')
-    pg.click('.bi-title:has-text("Old reply")'); pg.wait_for_selector('.sheet input[name=title]')
+    pg.click('#home-today .task:has-text("Chapter 3") .circle'); pg.wait_for_timeout(200)
+    check(ev(pg, "() => get('ch3').done") and 'Chapter 3' not in pg.inner_text('#home-today') and '1 task done today' in pg.inner_text('#home-done'), 'tick in place')
+    pg.click('#home-today .habit:has-text("Walk")'); pg.wait_for_timeout(200)
+    check(ev(pg, "() => !!get('walk').log[today()]"), 'habit ticked from Home')
+    pg.click('#home-today .task-main:has-text("Old reply")'); pg.wait_for_selector('.sheet input[name=title]')
     check(pg.input_value('.sheet input[name=title]') == 'Old reply', 'title should open the task')
 
 @test('Home', 'A full day reads as a climb; events can have an end time')
@@ -280,7 +286,7 @@ def _(pg, ctx):
     pg.click('.habit[data-id]'); pg.wait_for_timeout(150)
     check(pg.get_attribute('.habit[data-id]', 'aria-pressed') == 'true', 'not ticked')
     go(pg, 'progress')
-    check('3 of last 7 days' in pg.inner_text('.hrow') and 'streak' not in pg.inner_text('.hrow').lower(), pg.inner_text('.hrow'))
+    check('3 of 7 days' in pg.inner_text('.hrow') and 'streak' not in pg.inner_text('.hrow').lower(), pg.inner_text('.hrow'))
     check(count(pg, '.h28 i') == 28 and count(pg, '.h28 i.on') == 3, '28-day grid wrong')
     pg.click('.hrow'); pg.fill('.sheet input[name=title]', 'Walk 20 min'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'habit')[0]['title'] == 'Walk 20 min', 'rename failed')
@@ -316,8 +322,8 @@ def _(pg, ctx):
     go(pg, 'calendar', T(pg))
     check('Ask about the prior' not in pg.inner_text('.agenda'), 'still on today')
     go(pg, 'home')
-    check('Ask about the prior' in pg.inner_text('.blist.need') and 'A note for tomorrow' in pg.inner_text('.blist.need'), 'Home should mention it')
-    pg.click('.bi-title:has-text("Ask about the prior")'); pg.wait_for_selector('#note-title')
+    check('Ask about the prior' in pg.inner_text('#coming-up') and 'A note for tomorrow' in pg.inner_text('#coming-up'), 'Home should mention it')
+    pg.click('#coming-up .soon-row:has-text("Ask about the prior")'); pg.wait_for_selector('#note-title')
     check(pg.input_value('#note-title') == 'Ask about the prior', 'opens the note')
     pg.click('[data-action=note-day]:has-text("Today")'); pg.wait_for_timeout(100); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'note')[0]['date'] == T(pg), 'moving an existing note to today')
@@ -377,7 +383,7 @@ def _(pg, ctx):
     check(pg.inner_text('.sheet').count('(optional)') == 3, 'only the first question should be needed')
     pg.fill('.sheet input[name=title]', 'Finish Paper 2'); pg.fill('.sheet textarea[name=why]', 'Get it out before the conference')
     pg.click('.sheet .chip:has-text("In a month")')
-    check(pg.input_value('#goal-by') == add_days(pg, 30), 'by-when chip')
+    check(pg.eval_on_selector('.sheet input[name=by]:checked', 'e => e.value') == add_days(pg, 30), 'by-when chip')
     pg.click('.sheet .btn.primary'); pg.wait_for_selector('#goal-step-in')
     check('Goal added' in pg.inner_text('#toast') and 'Needs a next step' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
     g = recs(pg, 'goal')[0]
@@ -404,7 +410,7 @@ def _(pg, ctx):
     open_app(pg, 'goals')
     check('Add your first goal' in pg.inner_text('main') and count(pg, '[data-action=goal-example]') == 4, 'empty state')
     pg.click('[data-action=goal-example]:has-text("Read books")'); pg.wait_for_selector('.sheet input[name=title]')
-    check(pg.input_value('.sheet input[name=title]') == 'Read books' and pg.input_value('.sheet input[name=target]') == '12' and pg.input_value('#goal-by').endswith('-12-31'), 'example fills the form')
+    check(pg.input_value('.sheet input[name=title]') == 'Read books' and pg.input_value('.sheet input[name=target]') == '12' and pg.eval_on_selector('.sheet input[name=by]:checked', 'e => e.value').endswith('-12-31'), 'example fills the form')
     pg.fill('.sheet input[name=target]', '3'); pg.click('.sheet .btn.primary'); pg.wait_for_selector('.gstate.big')
     pg.click('.sheet .btn.primary[data-action=sheet-close]'); sheet_closed(pg)
     pg.click('.gcard [data-action=goal-inc]'); pg.wait_for_timeout(150)
@@ -420,17 +426,19 @@ def _(pg, ctx):
 def _(pg, ctx):
     open_app(pg)
     add_task(pg, 'Draft abstract'); pg.click('.task-main'); pg.wait_for_selector('.sheet input[name=title]')
-    check(count(pg, '.sheet select[name=goalId]') == 0, 'no picker without goals')
+    check(count(pg, '.sheet input[name=goalId]') == 0, 'no picker without goals')
     ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
     gid = ev(pg, "async () => (await put({type:'goal', title:'Paper 2', target:0, log:{}})).id")
-    pg.click('.task-main'); pg.wait_for_selector('.sheet select[name=goalId]')
-    pg.select_option('.sheet select[name=goalId]', label='Paper 2'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    pg.click('.task-main'); pg.wait_for_selector('.sheet input[name=goalId]', state='attached')
+    pg.click('.sheet .chip:has-text("Paper 2")'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'task')[0]['goalId'] == gid and 'Paper 2' in pg.inner_text('.tgoal'), 'task tied')
-    go(pg, 'progress'); pg.click('[data-action=habit-new]'); pg.wait_for_selector('.sheet select[name=goalId]')
-    pg.fill('.sheet input[name=title]', 'Write 30 minutes'); pg.select_option('.sheet select[name=goalId]', label='Paper 2'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
+    go(pg, 'progress'); pg.click('[data-action=habit-new]'); pg.wait_for_selector('.sheet input[name=goalId]', state='attached')
+    pg.fill('.sheet input[name=title]', 'Write 30 minutes'); pg.click('.sheet .chip:has-text("Paper 2")'); pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'habit')[0]['goalId'] == gid, 'habit tied')
     go(pg, 'goals'); pg.click('.gcard-main'); pg.wait_for_selector('.gstate.big')
     check('Write 30 minutes' in pg.inner_text('.sheet') and 'Draft abstract' in pg.inner_text('#goal-steps'), 'goal shows its steps and habits')
+    pg.click('.sheet .habit'); pg.wait_for_timeout(250)
+    check(pg.get_attribute('.sheet .habit', 'aria-pressed') == 'true' and recs(pg, 'habit')[0]['log'].get(T(pg)), 'a habit ticked inside the goal shows it')
 
 @test('Heading', 'Where you’re heading: finished work by goal, the goal behind its date named first, its fix, and rows that open the goal')
 def _(pg, ctx):
@@ -450,7 +458,7 @@ def _(pg, ctx):
     check('Behind' in pg.inner_text('.hrow-goal:has-text("Paper 2")') and 'On track' in pg.inner_text('.hrow-goal:has-text("Get fit")'), pg.inner_text('#heading'))
     fx = pg.inner_text('#fixes')
     check('“Paper 2” is behind' in fx and 'about 9 steps a week' in fx and 'Open goal' in fx, fx)
-    check(pg.locator('.brief-bottom section').first.get_attribute('id') == 'heading', 'heading comes first on Home')
+    check(pg.locator('.brief > section').first.get_attribute('id') == 'heading', 'heading comes first on Home')
     pg.click('.hrow-goal:has-text("Paper 2")'); pg.wait_for_selector('.gstate.big')
     check('To make the date, about 9 steps a week; lately 0.5.' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
 
@@ -466,18 +474,18 @@ def _(pg, ctx):
     check(pg.inner_text('#heading-line') == '“Learn Spanish” hasn’t moved in 14 days.', pg.inner_text('#heading-line'))
     fx = pg.inner_text('#fixes')
     check('Get “Learn Spanish” moving' in fx and 'Put “Lesson 3” on tomorrow?' in fx and '“Tax forms” keeps getting moved' in fx, fx)
-    pg.click('li[data-fix^="stall-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
+    pg.click('.fix-card[data-fix^="stall-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
     check(ev(pg, "() => get('l3').date") == add_days(pg, 1) and 'is on tomorrow' in pg.inner_text('#toast'), 'applied')
-    check(count(pg, 'li[data-fix^="stall-"]') == 0, 'a scheduled step is not a stall to fix')
+    check(count(pg, '.fix-card[data-fix^="stall-"]') == 0, 'a scheduled step is not a stall to fix')
     pg.click('#toast-action'); pg.wait_for_timeout(300)
-    check(ev(pg, "() => get('l3').date") == '' and count(pg, 'li[data-fix^="stall-"]') == 1, 'undo')
-    pg.click('li[data-fix^="split-"] [data-action=fix-apply]'); pg.wait_for_selector('.sheet input[name=title]')
+    check(ev(pg, "() => get('l3').date") == '' and count(pg, '.fix-card[data-fix^="stall-"]') == 1, 'undo')
+    pg.click('.fix-card[data-fix^="split-"] [data-action=fix-apply]'); pg.wait_for_selector('.sheet input[name=title]')
     check(pg.input_value('.sheet input[name=title]') == 'Tax forms', 'without AI it opens the task')
     ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
-    pg.click('li[data-fix^="split-"] [data-action=fix-dismiss]'); pg.wait_for_timeout(250)
-    check(count(pg, 'li[data-fix^="split-"]') == 0 and ev(pg, "() => S.settings.fixSnooze['split-tx']") == add_days(pg, 7), 'Not now')
+    pg.click('.fix-card[data-fix^="split-"] [data-action=fix-dismiss]'); pg.wait_for_timeout(250)
+    check(count(pg, '.fix-card[data-fix^="split-"]') == 0 and ev(pg, "() => S.settings.fixSnooze['split-tx']") == add_days(pg, 7), 'Not now')
     reload(pg); pg.wait_for_timeout(200)
-    check(count(pg, 'li[data-fix^="split-"]') == 0 and count(pg, 'li[data-fix^="stall-"]') == 1, 'snooze kept after reload')
+    check(count(pg, '.fix-card[data-fix^="split-"]') == 0 and count(pg, '.fix-card[data-fix^="stall-"]') == 1, 'snooze kept after reload')
 
 @test('Heading', 'Fixes: a day fuller than usual offers to move the newest loose tasks to later this week; tasks tied to goals stay; Undo')
 def _(pg, ctx):
@@ -488,9 +496,9 @@ def _(pg, ctx):
       await put({type:'task', title:'G step', date:t, done:false, goalId:g.id});
       for (let i = 0; i < 5; i++) await put({type:'task', title:'L'+i, date:t, done:false}); }""")
     pg.wait_for_timeout(150)
-    fx = pg.inner_text('li[data-fix^="lighten-"]')
+    fx = pg.inner_text('.fix-card[data-fix^="lighten-"]')
     check('Today is fuller than your usual day' in fx and 'You finish about 1 a day and today has 6' in fx and 'Move 5 to later this week' in fx, fx)
-    pg.click('li[data-fix^="lighten-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
+    pg.click('.fix-card[data-fix^="lighten-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
     t = T(pg); tasks = [x for x in recs(pg, 'task') if not x['done']]
     check([x['title'] for x in tasks if x['date'] == t] == ['G step'], [(x['title'], x['date']) for x in tasks])
     check(sorted(x['date'] for x in tasks if x['title'] != 'G step') == [add_days(pg, i) for i in range(1, 6)] and all(x['moved'] == 1 for x in tasks if x['title'] != 'G step'), 'spread over the coming days')
@@ -503,15 +511,15 @@ def _(pg, ctx):
     gid = ev(pg, """async () => { const t = today(); const g = await put({type:'goal', title:'Paper 2', why:'Conference', target:0, by:addDays(t,3), log:{}});
       await put({type:'task', title:'Existing step', date:addDays(t,-1), done:true, doneDate:addDays(t,-1), goalId:g.id}); return g.id; }""")
     ai_setup(pg, 'gsteps'); pg.wait_for_timeout(150)
-    check('✦ Plan steps' in pg.inner_text('li[data-fix^="steps-"]'), pg.inner_text('#fixes'))
-    AI_LOG.clear(); pg.click('li[data-fix^="steps-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error', timeout=10000)
+    check('✦ Plan steps' in pg.inner_text('.fix-card[data-fix^="steps-"]'), pg.inner_text('#fixes'))
+    AI_LOG.clear(); pg.click('.fix-card[data-fix^="steps-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error', timeout=10000)
     sent = posts()[0]['body']['messages']
     check(len(posts()) == 1 and sent[0]['content'].startswith('Plan the next concrete steps') and 'Goal: Paper 2' in sent[-1]['content'] and 'Existing step' in sent[-1]['content'], 'request')
     check(count(pg, '.org-item') == 3 and pg.input_value('.org-item:nth-child(3) input[type=date]') == add_days(pg, 3), pg.inner_text('#tool-result'))
     pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(200)
     steps = [x for x in recs(pg, 'task') if not x['done']]
     check(len(steps) == 3 and all(x['goalId'] == gid for x in steps) and 'Added 3 steps to “Paper 2”' in pg.inner_text('#toast'), steps)
-    check(count(pg, 'li[data-fix^="steps-"]') == 0, 'fix gone once there are steps')
+    check(count(pg, '.fix-card[data-fix^="steps-"]') == 0, 'fix gone once there are steps')
     pg.click('#toast-action'); pg.wait_for_timeout(300)
     check(not [x for x in recs(pg, 'task') if not x['done']], 'undo')
 
@@ -522,9 +530,9 @@ def _(pg, ctx):
       await put({id:'tA', type:'task', title:'Write paper intro', date:t, done:false}); await put({id:'tB', type:'task', title:'Paper figures', date:'', done:false});
       await put({id:'tC', type:'task', title:'Buy milk', date:'', done:false}); await put({id:'tD', type:'task', title:'Old tied one', date:'', done:false, goalId:a.id}); return [a.id, b.id]; }""")
     ai_setup(pg, 'glink'); pg.wait_for_timeout(150)
-    fx = pg.inner_text('li[data-fix^="link-"]')
+    fx = pg.inner_text('.fix-card[data-fix^="link-"]')
     check('3 open tasks aren’t tied to a goal' in fx and '✦ Tie to goals' in fx, fx)
-    AI_LOG.clear(); pg.click('li[data-fix^="link-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error, #rev-empty', timeout=10000)
+    AI_LOG.clear(); pg.click('.fix-card[data-fix^="link-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error, #rev-empty', timeout=10000)
     user = posts()[0]['body']['messages'][-1]['content']
     check('Buy milk' in user and 'Old tied one' not in user, user)
     check(count(pg, '.org-item') == 2, pg.inner_text('#tool-result'))
@@ -796,7 +804,7 @@ def _(pg, ctx):
     need = pg.inner_text('#fixes')
     check('Your weekly look back is ready' in need and 'A plan for this week' in need, need)
     pg.click('.bi-title:has-text("A plan for this week")'); pg.wait_for_selector('#rev-list')
-    pg.click('[data-action=pending-dismiss]'); sheet_closed(pg); pg.wait_for_timeout(200)
+    pg.click('.sheet [data-action=pending-dismiss]'); sheet_closed(pg); pg.wait_for_timeout(200)
     check('A plan for this week' not in pg.inner_text('.brief'), 'Not now should clear it')
 
 @test('Automatic', 'Settings warns when the key is not kept, and shows a failed run plainly')
@@ -904,17 +912,94 @@ def _(pg, ctx):
     reload(pg)
     check(ev(pg, '() => document.documentElement.dataset.theme') == 'dark' and ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") == '#81c995', 'not persisted')
     pg.click('[data-action=set-theme][data-v=light]'); pg.wait_for_timeout(100)
-    check(ev(pg, '() => getComputedStyle(document.body).backgroundColor') == 'rgb(252, 252, 251)', 'light')
+    check(ev(pg, '() => getComputedStyle(document.body).backgroundColor') == 'rgb(250, 248, 255)', 'light')
 
-@test('Look', 'Warm look everywhere: clay by default, serif page titles, and an old blue choice moves to clay once')
+@test('Look', 'New look everywhere: violet by default, display type for page titles, pill buttons, and the old clay default moves to violet once')
 def _(pg, ctx):
     open_app(pg)
-    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#b5532f', '#e07a52'), 'not clay')
+    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()") in ('#6a3df0', '#a88bff'), 'not violet')
+    check(ev(pg, "() => getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()") in ('106 61 240', '168 139 255'), 'brand channels for Tailwind')
     for v in ['today', 'calendar', 'goals', 'notes', 'progress', 'settings']:
         go(pg, v)
-        check('Fraunces' in ev(pg, "() => getComputedStyle(document.querySelector('.top h1')).fontFamily"), f'{v} title not serif')
-    check(ev(pg, "() => mergeSettings({accent:'blue'}).accent") == 'clay' and ev(pg, "() => mergeSettings({accent:'blue', look:2}).accent") == 'blue' and ev(pg, "() => mergeSettings({accent:'green'}).accent") == 'green', 'accent migration')
-    check(ev(pg, "() => getComputedStyle(document.querySelector('.btn')).borderRadius") == '8px', 'buttons should not be pills')
+        check('Bricolage Grotesque' in ev(pg, "() => getComputedStyle(document.querySelector('.top h1')).fontFamily"), f'{v} title not in the display face')
+    check(ev(pg, "() => mergeSettings({accent:'clay', look:2}).accent") == 'violet' and ev(pg, "() => mergeSettings({accent:'clay', look:3}).accent") == 'clay'
+          and ev(pg, "() => mergeSettings({accent:'blue'}).accent") == 'violet' and ev(pg, "() => mergeSettings({accent:'blue', look:2}).accent") == 'blue'
+          and ev(pg, "() => mergeSettings({accent:'green'}).accent") == 'green' and ev(pg, "() => mergeSettings({accent:'purple', look:3}).accent") == 'violet', 'accent migration')
+    check(ev(pg, "() => parseFloat(getComputedStyle(document.querySelector('.btn, .pill')).borderTopLeftRadius)") >= 18, 'buttons are pills')
+    check(not ev(pg, "() => [...document.scripts].some(s => s.src)") and ev(pg, "() => !!document.querySelector('style').textContent.includes('--tw-')"), 'Tailwind is compiled into the page, no CDN script')
+
+@test('Add', 'The + button: a task with a day chip and a goal chip in one sheet, Enter adds it, Undo takes it back')
+def _(pg, ctx):
+    open_app(pg, '')
+    gid = ev(pg, "async () => (await put({type:'goal', title:'Paper 2', target:0, log:{}})).id")
+    pg.click('.fab'); pg.wait_for_selector('#qa-title')
+    check(ev(pg, '() => document.activeElement.id') == 'qa-title', 'typing box should be ready')
+    check(pg.is_checked('.sheet input[name=kind][value=task]') and pg.is_checked(f'.sheet input[name=when][value="{T(pg)}"]'), 'task for today by default')
+    pg.fill('#qa-title', 'Draft abstract'); pg.click('.sheet .chip:has-text("Tomorrow")'); pg.click('.sheet .chip:has-text("Paper 2")')
+    pg.press('#qa-title', 'Enter'); sheet_closed(pg)
+    x = recs(pg, 'task')[0]
+    check(x['title'] == 'Draft abstract' and x['date'] == add_days(pg, 1) and x['goalId'] == gid, x)
+    check('Added for Tomorrow' in pg.inner_text('#toast'), pg.inner_text('#toast'))
+    pg.click('#toast-action'); pg.wait_for_timeout(200)
+    check(not recs(pg, 'task'), 'undo')
+    pg.click('.fab'); pg.wait_for_selector('#qa-title')
+    pg.fill('#qa-title', 'Call mom friday'); pg.press('#qa-title', 'Enter'); sheet_closed(pg)
+    x = recs(pg, 'task')[0]
+    check(x['title'] == 'Call mom' and x['date'] > T(pg), 'a date word still wins over the chip')
+    pg.click('.fab'); pg.wait_for_selector('#qa-title')
+    pg.fill('#qa-title', 'Visa form'); pg.fill('.sheet input[data-other=when]', add_days(pg, 10)); pg.wait_for_timeout(100)
+    check(not ev(pg, "() => [...document.querySelectorAll('.sheet input[name=when]')].some(r => r.checked)") and pg.get_attribute('.sheet .chip:has(input[data-other])', 'data-on') == 'true', 'Other day replaces the chips')
+    pg.click('#qa-add'); sheet_closed(pg)
+    check([r for r in recs(pg, 'task') if r['title'] == 'Visa form'][0]['date'] == add_days(pg, 10), 'other day saved')
+
+@test('Add', 'The + button: an event reads its time, a habit and a goal need only a name, a note opens the editor, an empty task is refused')
+def _(pg, ctx):
+    open_app(pg, 'calendar')
+    d = add_days(pg, 3); go(pg, 'calendar', d)
+    pg.click('.fab'); pg.wait_for_selector('#qa-title')
+    check(pg.is_checked(f'.sheet input[name=when][value="{d}"]'), 'the day you were on comes first')
+    pg.click('.sheet .kind:has-text("Event")'); pg.wait_for_selector('#qa-time')
+    pg.fill('#qa-title', 'Dentist 3:30pm'); pg.click('#qa-add'); sheet_closed(pg)
+    e = recs(pg, 'event')[0]
+    check(e['title'] == 'Dentist' and e['time'] == '15:30' and e['date'] == d, e)
+    pg.click('.fab'); pg.wait_for_selector('#qa-title'); pg.click('.sheet .kind:has-text("Event")'); pg.wait_for_selector('#qa-time')
+    pg.fill('#qa-title', 'Seminar 11am friday'); pg.click('#qa-add'); sheet_closed(pg)
+    e = [x for x in recs(pg, 'event') if x['title'] == 'Seminar'][0]
+    check(e['time'] == '11:00' and e['date'] > T(pg), f'time before the day word: {e}')
+    check(ev(pg, "() => [LB.parseTime('Buy 2'), LB.parseTime('Call at 9:05'), LB.parseTime('Party 12am'), LB.parseTime('Meet 25:00')]") == [None, {'title': 'Call', 'time': '09:05'}, {'title': 'Party', 'time': '00:00'}, None], 'time parsing')
+    pg.click('.fab'); pg.wait_for_selector('#qa-title'); pg.click('#qa-add')
+    check('Type something first' in pg.inner_text('.sheet .err'), 'empty refused')
+    pg.click('.sheet .kind:has-text("Habit")'); pg.fill('#qa-title', 'Stretch'); pg.click('#qa-add'); sheet_closed(pg)
+    check(recs(pg, 'habit')[0]['title'] == 'Stretch', 'habit')
+    pg.click('.fab'); pg.wait_for_selector('#qa-title'); pg.click('.sheet .kind:has-text("Goal")'); pg.fill('#qa-title', 'Learn Spanish'); pg.click('#qa-add')
+    pg.wait_for_selector('#goal-step-in')
+    check(recs(pg, 'goal')[0]['title'] == 'Learn Spanish' and recs(pg, 'goal')[0]['target'] == 0, 'goal opens at its first step')
+    ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
+    pg.click('.fab'); pg.wait_for_selector('#qa-title'); pg.click('.sheet .kind:has-text("Note")'); pg.fill('#qa-title', 'Why the fit moved'); pg.click('#qa-add')
+    pg.wait_for_selector('#note-body')
+    check(pg.input_value('#note-body') == 'Why the fit moved' and recs(pg, 'note')[0]['date'] == d, 'note opens in the editor, on that day')
+
+@test('Tasks', 'Swipe a task right to tick it off, left to move it to tomorrow, each with Undo; a short drag does nothing')
+def _(pg, ctx):
+    open_app(pg)
+    ev(pg, "async () => { await put({id:'a', type:'task', title:'Swipe me', date: today(), done:false}); await put({id:'b', type:'task', title:'Later one', date: today(), done:false}); }")
+    pg.wait_for_timeout(150)
+    swipe = """([sel, dx]) => { const el = document.querySelector(sel), r = el.getBoundingClientRect(), x = r.left + 60, y = r.top + r.height / 2;
+      const ev = (type, cx) => el.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', clientX: cx, clientY: y, bubbles: true, isPrimary: true }));
+      ev('pointerdown', x); for (let i = 1; i <= 6; i++) ev('pointermove', x + (dx * i) / 6); ev('pointerup', x + dx); }"""
+    ev(pg, swipe, ['.task[data-task=a] .task-main', 40]); pg.wait_for_timeout(400)
+    check(not ev(pg, "() => get('a').done") and ev(pg, "() => get('a').date") == T(pg), 'a short drag should spring back')
+    ev(pg, swipe, ['.task[data-task=a] .task-main', 160]); pg.wait_for_timeout(500)
+    check(ev(pg, "() => get('a').done"), 'swipe right should tick it off')
+    pg.click('#toast-action'); pg.wait_for_timeout(200)
+    check(not ev(pg, "() => get('a').done"), 'undo')
+    ev(pg, swipe, ['.task[data-task=b] .task-main', -160]); pg.wait_for_timeout(500)
+    check(ev(pg, "() => get('b').date") == add_days(pg, 1) and ev(pg, "() => get('b').moved") == 1 and 'moved to tomorrow' in pg.inner_text('#toast'), 'swipe left moves to tomorrow')
+    check(count(pg, '.sheet') == 0, 'a swipe must not open the task')
+    pg.click('#toast-action'); pg.wait_for_timeout(200)
+    check(ev(pg, "() => get('b').date") == T(pg), 'undo')
+    go(pg, 'calendar'); ev(pg, swipe, ['.legend .dot.task', 120]); pg.wait_for_timeout(300)  # a calendar dot is not a task row
+    check(ev(pg, "() => get('a').date") == T(pg) and not ev(pg, "() => get('a').done"), 'nothing changed')
 
 @test('Tasks', 'Quick add reads a date word at the end: one step instead of five, with Undo')
 def _(pg, ctx):
@@ -968,7 +1053,7 @@ def _(pg, ctx):
     reload(pg); go(pg, 'home')
     check('Save a backup file' not in pg.inner_text('.brief'), 'reminder should go away after a backup')
 
-@test('Accessibility', 'axe-core finds no WCAG 2.2 A/AA problems on any screen, light or dark')
+@test('Accessibility', 'axe-core finds no WCAG 2.2 A/AA problems on any screen or the main sheets, light or dark')
 def _(pg, ctx):
     axe = next((p for p in [os.environ.get('AXE_JS', ''), os.path.join(ROOT, 'node_modules/axe-core/axe.min.js')] if p and os.path.exists(p)), None)
     if not axe: raise Blocked('axe-core not installed (npm i axe-core, or set AXE_JS)')
@@ -982,13 +1067,22 @@ def _(pg, ctx):
               await put({type:'task', title:'Done', date:t, done:true, doneDate:t}); await put({type:'habit', title:'H', log:{}}); await put({type:'goal', title:'G', target:3, log:{}});
               const g = await put({type:'goal', title:'Paper', target:0, by:addDays(t,10), log:{}}); await put({type:'task', title:'Step', date:t, done:false, goalId:g.id});
               await put({type:'task', title:'Did', date:addDays(t,-1), done:true, doneDate:addDays(t,-1), goalId:g.id});
-              await put({type:'note', title:'N', body:'b'}); }""")
+              await put({type:'note', title:'N', body:'b'}); const d = new Date(); d.setHours(15, 0, 0, 0); LB.now = () => new Date(d); }""")
             bad = []
             for v in ['home', 'today', 'calendar', 'goals', 'notes', 'progress', 'settings']:
                 n, s_ = (v.split('-') + [''])[:2]; ev(p2, f"() => LB.go('{n}', '{s_}')"); p2.wait_for_timeout(120)
                 p2.add_script_tag(content=src)
                 r = ev(p2, "async () => (await axe.run(document, {runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']})).violations.map(v => v.id + ' ×' + v.nodes.length + ' ' + v.nodes[0].target.join(' '))")
                 bad += [f'{theme}/{v}: {x}' for x in r]
+            ev(p2, "() => LB.go('home')"); p2.wait_for_timeout(120)
+            for name, js in [('add', "() => LB.A['quick-add']({dataset:{}})"), ('task', "() => LB.A['task-edit']({dataset:{id: all('task').find(x => !x.done).id}})"), ('goal', "() => LB.goalDetail(all('goal').find(g => g.title === 'Paper'))"), ('menu', '() => LB.openMenu()')]:
+                ev(p2, js); p2.wait_for_timeout(600)
+                if name == 'task':  # a picked "Other day" chip too
+                    p2.fill('.sheet input[data-other=date]', ev(p2, '() => addDays(today(), 9)')); p2.wait_for_timeout(100)
+                p2.add_script_tag(content=src)
+                r = ev(p2, "async () => (await axe.run(document, {runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']})).violations.map(v => v.id + ' ×' + v.nodes.length + ' ' + v.nodes[0].target.join(' '))")
+                bad += [f'{theme}/{name} sheet: {x}' for x in r]
+                ev(p2, "() => { LB.closeSheet(); document.documentElement.classList.remove('menu-open'); }"); p2.wait_for_timeout(500)
             p2.close()
             check(not bad, '; '.join(bad))
     finally: ctx2.close()

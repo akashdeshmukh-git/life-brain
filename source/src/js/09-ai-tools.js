@@ -44,7 +44,7 @@ function aiTool({ title, intro, system, request, extra = '', sendLabel = 'Ask ag
       if (problem) { out.innerHTML = `<div class="ai-out"><p class="err" id="tool-error">${esc(problem)}</p></div>`; return; }
       TOOL.ctl = new AbortController();
       send.disabled = true;
-      out.innerHTML = '<div class="ai-out"><p class="muted">Thinking…</p><button class="btn sm" data-action="tool-stop">Stop</button></div>';
+      out.innerHTML = `<div class="ai-out flex items-center justify-between gap-3"><p class="flex items-center gap-2 text-muted"><span class="ai-mark animate-pulse">${icon('spark')}</span>Thinking…</p><button class="btn sm bg-raised" data-action="tool-stop">Stop</button></div>`;
       try {
         const text = await AI.call(request(root), { signal: TOOL.ctl.signal, system });
         if (!document.contains(out)) return;
@@ -69,7 +69,7 @@ function drawReview() {
   const n = REV.rows.filter((r) => r.on).length;
   out.innerHTML = REV.rows.length
     ? `<div class="org-list" id="rev-list">${REV.rows.map((r, i) => `<div class="org-item${r.on ? '' : ' off'}"><input type="checkbox" class="org-on" data-rev="on" data-i="${i}" ${r.on ? 'checked' : ''} aria-label="Include this change"><div class="org-main">${REV.row(r, i)}</div></div>`).join('')}</div>
-       <div class="row-end"><button class="btn primary" id="rev-apply" data-action="rev-apply" ${n ? '' : 'disabled'}>${esc(REV.label)} ${n || ''}</button></div>`
+       <div class="sticky-act flex justify-end"><button class="btn primary" id="rev-apply" data-action="rev-apply" ${n ? '' : 'disabled'}>${esc(REV.label)} ${n || ''}</button></div>`
     : '<div class="ai-out"><p class="muted" id="rev-empty">Nothing to change.</p></div>';
 }
 const revInput = (ev) => {

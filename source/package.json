@@ -1,0 +1,14 @@
+{
+  "name": "life-brain",
+  "private": true,
+  "description": "Life Brain: tasks, calendar, notes, habits and goals, kept on your phone.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "python3 tests/run.py"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "5.1.1",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17"
+  }
+}

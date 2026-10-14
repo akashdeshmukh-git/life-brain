@@ -208,7 +208,7 @@ LB.askAI = askAI;
 async function runAI(root, user) {
   const out = $('#ai-result', root), send = $('#ai-send', root), ctl = new AbortController();
   send.disabled = true;
-  out.innerHTML = `<div class="ai-out"><p class="muted">Thinking…</p><button class="btn sm" id="ai-stop">Stop</button></div>`;
+  out.innerHTML = `<div class="ai-out flex items-center justify-between gap-3"><p class="flex items-center gap-2 text-muted"><span class="ai-mark animate-pulse">${icon('spark')}</span>Thinking…</p><button class="btn sm bg-raised" id="ai-stop">Stop</button></div>`;
   $('#ai-stop', root).addEventListener('click', () => ctl.abort());
   out.scrollIntoView({ block: 'nearest' });
   try {
