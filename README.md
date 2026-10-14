@@ -12,6 +12,8 @@ Or pick Task, Event, Note, Habit or Goal yourself, type, then tap a chip: Today,
 
 Swipe a task right to tick it off, or left to move it to tomorrow. Both have Undo, and the circle and the task sheet do the same.
 
+Ticking gives you something back: the circle pops, the row slides away, and the phone gives a light buzz. Home's Today has a bar that fills as the day's list gets done, and when the last one goes it tells you the list is clear. Habits you've kept two days or more show the streak on their chip. Screens slide in when you move between them. With Reduce motion on in your phone's settings, the animations are skipped.
+
 ## The six screens
 
 Everything is in the menu: tap **☰** at the top left, or swipe in from the left edge. Each item says what it's for, and Settings is at the bottom. The first time you open the app, **How it works** explains each screen. It's in the menu too, whenever you want it again.

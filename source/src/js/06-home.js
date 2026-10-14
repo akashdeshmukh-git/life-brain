@@ -90,11 +90,13 @@ function todaySection(D, t) {
   const over = D.tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date) || byCreated(a, b));
   const todays = D.tasks.filter((x) => !x.done && x.date === t).sort(byCreated);
   const list = [...over, ...todays], shown = list.slice(0, 6), more = list.length - shown.length;
-  const habits = D.habits.slice().sort(byCreated);
+  const habits = D.habits.slice().sort(byCreated), doneT = doneOn(D, t).length, total = doneT + list.length;
+  const clear = !list.length && doneT; // everything for today is done
   return `<section class="mt-5" id="home-today">
     <div class="sec-h"><h2>Today</h2><button class="link" data-action="nav" data-to="today">${list.length ? `${list.length} left` : 'All tasks'}</button></div>
-    <div class="card mt-1 !py-1">
-      ${shown.map((x) => taskRow(x, t, { compact: true })).join('') || '<p class="calm py-3 text-[15px] text-muted">Nothing due today.</p>'}
+    ${total ? `<div class="mt-1 flex items-center gap-3" id="day-progress"><span class="meter flex-1"><i class="day-fill" style="width:${Math.round((doneT / total) * 100)}%"></i></span><span class="text-sm font-semibold tabular-nums text-muted">${doneT} of ${total} done</span></div>` : ''}
+    <div class="card mt-2 !py-1">
+      ${shown.map((x) => taskRow(x, t, { compact: true })).join('') || (clear ? `<p class="calm flex items-center gap-3 py-3 text-[15px] font-semibold" id="day-clear"><span class="ai-mark !h-7 !w-7">${icon('check')}</span>Today’s list is clear. ${plural(doneT, 'task')} done.</p>` : '<p class="calm py-3 text-[15px] text-muted">Nothing due today.</p>')}
       ${more ? `<button class="fold border-t border-line" data-action="nav" data-to="today">${icon('down')}${plural(more, 'more task')} on Today</button>` : ''}
       <div class="border-t border-line">${addTaskForm(t, 'add-home', 'Add a task for today', true).replace('class="add-row"', 'class="add-row !bg-transparent !px-1"')}</div>
     </div>
