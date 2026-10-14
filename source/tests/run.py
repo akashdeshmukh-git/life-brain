@@ -1048,6 +1048,17 @@ def _(pg, ctx):
     pg.click('.sheet .kind:has-text("Task")'); pg.click('#qa-add'); sheet_closed(pg)
     check(len(recs(pg, 'task')) == 2, 'picking a kind adds it without the AI')
 
+@test('Add', 'Installed-app polish: the Add shortcut on the home-screen icon opens + ready to type; taps never zoom; controls don’t select text; the manifest installs from this folder')
+def _(pg, ctx):
+    open_app(pg, 'add')
+    pg.wait_for_selector('#qa-title')
+    check(ev(pg, '() => document.activeElement.id') == 'qa-title' and ev(pg, '() => location.hash') == '#home', 'shortcut opens the + sheet focused')
+    check(ev(pg, "() => getComputedStyle(document.documentElement).touchAction") == 'manipulation', 'no double-tap zoom')
+    check(ev(pg, "() => getComputedStyle(document.querySelector('.sheet button')).userSelect") == 'none' and ev(pg, "() => getComputedStyle(document.querySelector('#qa-title')).userSelect") != 'none', 'buttons don’t select text; typing boxes do')
+    m = ev(pg, "async () => (await fetch('manifest.webmanifest')).json()")
+    check(m['start_url'] == './' and m['scope'] == './' and m['display'] == 'standalone' and m['orientation'] == 'portrait' and [x['url'] for x in m['shortcuts']] == ['./#add', './#today'] and 'journal' not in m['description'], m)
+    check(ev(pg, "() => !!document.querySelector('link[rel=manifest][href=\"manifest.webmanifest\"]')"), 'manifest linked')
+
 @test('Tasks', 'Quick add reads a date word at the end: one step instead of five, with Undo')
 def _(pg, ctx):
     open_app(pg)

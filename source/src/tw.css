@@ -30,7 +30,9 @@
   :focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; border-radius: 12px; }
   main:focus-visible, .drawer-panel:focus-visible, [tabindex="-1"]:focus-visible { outline: none; }
   svg { width: 22px; height: 22px; flex: none; }
+  html { touch-action: manipulation; } /* taps are instant, no double-tap zoom; pinch zoom still works */
   button { text-align: inherit; }
+  button, label.chip, label.kind, summary, .nav-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } /* controls, not text: a long press doesn't select or pop a menu. Notes and AI answers stay selectable. */
   input[type=date], input[type=time] { -webkit-appearance: none; appearance: none; }
   ::placeholder { color: rgb(var(--muted)); opacity: 1; }
 }
