@@ -1,5 +1,5 @@
-/* ===== Home: a 30-second glance. One line about the day, the day drawn as a line, then the few things you can
-   act on right here: tick today's tasks and habits, see where your goals stand, apply a fix. Built only from
+/* ===== Home: for doing. Today's events and list first, ticked in place; then the one goal that needs you and one
+   fix. The day drawn, what's coming, what's done and goals in full are folded away underneath. Built only from
    what's in the app. It observes and hands over: no orders, no pep talk, no scolding. ===== */
 const DAY_START = 6 * 60, DAY_END = 24 * 60;
 const toMins = (t) => { if (!/^\d{1,2}:\d{2}$/.test(t || '')) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -85,18 +85,18 @@ function eventStrip(D, t, nowMin) {
   }).join('')}</div>`;
 }
 
-/* Today, ready to tick: overdue first, then today's, then habits. The rest lives on Today. */
+/* Today, ready to tick: overdue first, then today's, then habits, and a box to add one more. The rest lives on Today. */
 function todaySection(D, t) {
   const over = D.tasks.filter((x) => isOverdue(x, t)).sort((a, b) => a.date.localeCompare(b.date) || byCreated(a, b));
   const todays = D.tasks.filter((x) => !x.done && x.date === t).sort(byCreated);
-  const list = [...over, ...todays], shown = list.slice(0, 5), more = list.length - shown.length;
+  const list = [...over, ...todays], shown = list.slice(0, 6), more = list.length - shown.length;
   const habits = D.habits.slice().sort(byCreated);
-  const left = list.length + habits.filter((h) => !habitDone(h, t)).length;
-  return `<section class="mt-7" id="home-today">
-    <div class="sec-h"><h2>Today</h2><button class="link" data-action="nav" data-to="today">${left ? `${left} to do` : 'All tasks'}</button></div>
+  return `<section class="mt-5" id="home-today">
+    <div class="sec-h"><h2>Today</h2><button class="link" data-action="nav" data-to="today">${list.length ? `${list.length} left` : 'All tasks'}</button></div>
     <div class="card mt-1 !py-1">
-      ${shown.map((x) => taskRow(x, t)).join('') || '<p class="calm py-3 text-[15px] text-muted">Nothing due today. Tap + to add something.</p>'}
+      ${shown.map((x) => taskRow(x, t, { compact: true })).join('') || '<p class="calm py-3 text-[15px] text-muted">Nothing due today.</p>'}
       ${more ? `<button class="fold border-t border-line" data-action="nav" data-to="today">${icon('down')}${plural(more, 'more task')} on Today</button>` : ''}
+      <div class="border-t border-line">${addTaskForm(t, 'add-home', 'Add a task for today', true).replace('class="add-row"', 'class="add-row !bg-transparent !px-1"')}</div>
     </div>
     ${habits.length ? `<div class="habits mt-3">${habits.map((h) => habitChip(h, t)).join('')}</div>` : ''}
   </section>`;
@@ -126,23 +126,33 @@ function doneLines(D, t) {
   return out.length ? `<section class="mt-7" id="home-done"><div class="sec-h"><h2>Already done</h2></div><ul class="mt-1 flex flex-col gap-1.5 text-[15px] text-muted">${out.slice(0, 4).map((l) => `<li>${l}</li>`).join('')}</ul></section>` : '';
 }
 
+/* Everything that isn't for doing right now, folded away: the day drawn, what's coming, what's done, goals in full. */
+function moreFold(D, t, sp, shape, nowMin) {
+  const soon = comingUp(D, t), done = doneLines(D, t);
+  const label = joinAnd(['Your day', soon && 'coming up', done && 'done', 'goals'].filter(Boolean));
+  return `<details class="more-fold mt-6" id="home-more" ${ui.homeMore ? 'open' : ''}><summary class="fold">${icon('down')}${esc(label)}</summary>
+    <section class="mt-2" id="home-day"><p class="day-line font-display text-[18px] leading-snug" id="day-line">${headline(D, t, sp, shape)}</p><div class="mt-3">${terrain(sp, shape, t, nowMin, true)}</div></section>
+    ${soon}${done}${headingSection(D, t)}</details>`;
+}
+document.addEventListener('toggle', (ev) => { if (ev.target.id === 'home-more') ui.homeMore = ev.target.open; }, true); // stays open across redraws
+const greeting = (now) => (now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening');
+
+/* Home, for doing: what's on, today's list to tick, the one goal that needs you, one fix. */
 VIEWS.home = () => {
   const D = data(), t = today(), now = LB.now(), nowMin = now.getHours() * 60 + now.getMinutes();
-  const sp = spans(eventsOn(D, t)), shape = dayShape(sp);
-  const ai = AUTO.busy ? `<p class="ai-line mt-4 flex items-center gap-2 text-muted" id="ai-busy"><span class="ai-mark animate-spin">${icon('spark')}</span>Your AI is working on ${esc(AUTO.busy)}…</p>`
-    : homeLine() ? `<div class="ai-line mt-4 flex items-start gap-2" id="home-line"><p class="flex-1 pt-0.5">${esc(homeLine())}</p><button class="icon-btn -my-2 !h-10 !w-10" data-action="home-ai" aria-label="Ask again about today"><span class="ai-mark">${icon('spark')}</span></button></div>`
-    : `<button class="pill ai-today mt-4" data-action="home-ai"><span class="ai-mark !h-5 !w-5">${icon('spark')}</span>What matters today?</button>`;
+  const sp = spans(eventsOn(D, t)), shape = dayShape(sp), nm = String(S.settings.name || '').trim();
+  const ai = AUTO.busy ? `<p class="ai-line mt-3 flex items-center gap-2 text-muted" id="ai-busy"><span class="ai-mark animate-spin">${icon('spark')}</span>Your AI is working on ${esc(AUTO.busy)}…</p>`
+    : homeLine() ? `<p class="ai-line mt-3" id="home-line">${esc(homeLine())}</p>` : '';
   return `<div class="brief">
-    <div class="top !pb-0">${menuBtn()}<p class="daydate flex-1 text-[15px] font-medium text-muted">${esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' }))}</p></div>
-    <h1 class="headline mt-2">${headline(D, t, sp, shape)}</h1>
+    <div class="top !pb-0">${menuBtn()}<p class="daydate flex-1 text-[15px] font-medium text-muted">${esc(fmtDate(t, { weekday: 'long', month: 'long', day: 'numeric' }))}</p>
+      <button class="icon-btn ai-today" data-action="home-ai" aria-label="${homeLine() ? 'Ask again about today' : 'What matters today?'}"><span class="ai-mark !h-7 !w-7">${icon('spark')}</span></button></div>
+    <h1 class="headline mt-1 !text-[28px]">${greeting(now)}${nm ? `, ${esc(nm)}` : ''}.</h1>
     ${ai}
-    <div class="mt-4">${terrain(sp, shape, t, nowMin, true)}</div>
     ${eventStrip(D, t, nowMin)}
-    ${headingSection(D, t)}
-    ${fixesSection(D, t)}
     ${todaySection(D, t)}
-    ${comingUp(D, t)}
-    ${doneLines(D, t)}
+    ${goalPulse(D, t)}
+    ${fixesSection(D, t)}
+    ${moreFold(D, t, sp, shape, nowMin)}
     ${fab()}</div>`;
 };
 let homeResize;

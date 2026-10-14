@@ -171,7 +171,7 @@
 .task { @apply relative flex items-start gap-1; touch-action: pan-y; }
 .task + .task { @apply border-t border-line; }
 .task-swipe { @apply absolute inset-0 flex items-center justify-between rounded-2xl px-4 text-sm font-semibold opacity-0; }
-.task-face { @apply relative flex flex-1 items-start gap-1 bg-raised; }
+.task-face { @apply relative flex min-w-0 flex-1 items-start gap-1 bg-raised; }
 .circle { @apply relative grid place-items-center w-11 h-12 shrink-0; }
 .circle::before { content: ""; @apply absolute w-[24px] h-[24px] rounded-full border-2 border-faint transition-colors; top: 13px; left: 10px; }
 .circle svg { @apply relative w-4 h-4 opacity-0; stroke-width: 3; margin-top: 2px; }
@@ -355,3 +355,10 @@
 .kind:has(input:checked) { @apply bg-raised text-ink shadow-lift; }
 .kind:has(input:focus-visible) { outline: 2px solid rgb(var(--brand)); outline-offset: 1px; }
 } /* end @layer components */
+
+/* Home's fold: one row that opens what isn't for right now */
+.more-fold > summary { @apply cursor-pointer list-none border-t border-line; }
+.more-fold > summary::-webkit-details-marker { display: none; }
+.more-fold[open] > summary svg { @apply rotate-0; }
+.task.compact .task-main { @apply py-3; }
+.task.compact .tag { @apply max-w-[112px]; } /* the title gets the room; the tag is a hint */

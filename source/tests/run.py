@@ -146,6 +146,26 @@ def until(pg, js, timeout=10):
         if ev(pg, js): return True
         pg.wait_for_timeout(100)
     raise AssertionError('timed out waiting for ' + js)
+def all_fixes(pg):
+    '''Home shows one fix at a time; step through them all and return their text.'''
+    seen = []
+    for _ in range(10):
+        if not count(pg, '#fixes'): break
+        t = pg.inner_text('#fixes').rsplit('\n', 1)[0]  # without the "1 of 4" pager
+        if t in seen: break
+        seen.append(t)
+        if not count(pg, '[data-action=fix-next]'): break
+        pg.click('[data-action=fix-next]'); pg.wait_for_timeout(80)
+    return '\n'.join(seen)
+def show_fix(pg, want):
+    '''Step through Home's fixes until one matches a selector (starting with . or [) or contains some text.'''
+    for _ in range(10):
+        if count(pg, '#fixes') and (count(pg, want) if want[0] in '.[' else want in pg.inner_text('#fixes')): return
+        if not count(pg, '[data-action=fix-next]'): break
+        pg.click('[data-action=fix-next]'); pg.wait_for_timeout(80)
+    raise AssertionError('fix not shown: ' + want)
+def open_more(pg):
+    if not ev(pg, "() => document.querySelector('#home-more').open"): pg.click('#home-more summary'); pg.wait_for_timeout(100)
 def auto_wait(pg, timeout=10):
     pg.wait_for_timeout(150); until(pg, '() => !LB.AUTO.running && !LB.AUTO.busy', timeout); pg.wait_for_timeout(200)
 
@@ -158,11 +178,13 @@ def _(pg, ctx):
     check(count(pg, '.tabbar, .tab') == 0 and count(pg, '[aria-label=Settings]') == 0, 'no bottom tabs and no gear on screens')
     check(ev(pg, '() => LB.route.name') == 'home', 'should start on Home')
     check(ev(pg, '() => S.records.size') == 0, 'records exist on a fresh start')
-    check(pg.inner_text('.headline').startswith('The whole day is yours'), pg.inner_text('.headline'))
+    check(pg.inner_text('.headline').startswith('Good '), pg.inner_text('.headline'))
+    check(pg.inner_text('#goal-pulse') == 'Add your first goal' and not ev(pg, "() => document.querySelector('#home-more').open"), 'one goal line; the rest folded')
+    open_more(pg); check(pg.inner_text('#day-line').startswith('The whole day is yours'), 'the day, in the fold')
     check('Nothing due today' in pg.inner_text('#home-today'), 'calm line missing')
     check('Tell your brain what you want' in pg.inner_text('#heading') and count(pg, '#heading [data-action=goal-new]') == 1, 'Home should invite a first goal')
     check(count(pg, '.terrain .ridge') == 1 and count(pg, '.terrain .now') <= 1, 'drawing')
-    check('Bricolage Grotesque' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '''() => document.fonts.check("600 32px 'Bricolage Grotesque'")'''), 'display headline font')
+    check('Bricolage Grotesque' in ev(pg, "() => getComputedStyle(document.querySelector('.headline')).fontFamily") and ev(pg, '''() => document.fonts.check("600 28px 'Bricolage Grotesque'")'''), 'display headline font')
     check(count(pg, '.fab[data-action=quick-add]') == 1, 'the + button')
 
 @test('Start', 'The menu: ☰ opens it, it shows where you are, items go to their screen, Settings is last, Escape and the backdrop close it')
@@ -200,7 +222,7 @@ def _(pg, ctx):
     check(pg.locator('.top h1').inner_text() == 'Today' and count(pg, '#add-today') == 1, 'today')
     check('Nothing for today' in pg.inner_text('main'), 'empty hint missing')
 
-@test('Home', 'Brief: headline with your name, the day as a line, today’s events as chips, tasks and habits ticked in place, coming up, already done')
+@test('Home', 'Do first: a greeting with your name, today’s events as chips, the list and habits ticked in place, a box to add, and the day, coming up and done folded away')
 def _(pg, ctx):
     open_app(pg, '')
     ev(pg, """async () => { const t = today(), y = addDays(t,-1);
@@ -215,12 +237,16 @@ def _(pg, ctx):
       const log={}; for (let i=1;i<=4;i++) log[addDays(t,-i)]=true; await put({id:'walk', type:'habit', title:'Walk', log});
       const d=new Date(); d.setHours(15,0,0,0); LB.now=()=>new Date(d); LB.render(); }""")
     pg.wait_for_timeout(150)
-    h = pg.inner_text('.headline')
-    check('Akash' in h and 'Three things on the calendar' in h, h)
+    check(pg.inner_text('.headline') == 'Good afternoon, Akash.', pg.inner_text('.headline'))
+    check(not ev(pg, "() => document.querySelector('#home-more').open"), 'the rest starts folded')
+    open_more(pg); check('Three things on the calendar' in pg.inner_text('#day-line'), pg.inner_text('#day-line'))
     check(count(pg, '.terrain .dot, .terrain .hollow') == 3 and count(pg, '.terrain .now') == 1, 'one dot per timed event, and now')
     chips = pg.locator('.ev-chip').all_inner_texts()
     check(len(chips) == 3 and 'Standup' in chips[0] and '9:30' in chips[0] and count(pg, '.ev-chip.past') == 2, chips)
-    check(pg.eval_on_selector_all('.brief > section', 'els => els.map(e => e.id)')[:1] == ['heading'], 'where you are heading comes first')
+    check(pg.eval_on_selector_all('.brief > section', 'els => els.map(e => e.id)')[:1] == ['home-today'], 'today comes first')
+    check(pg.inner_text('#goal-pulse') == 'Add your first goal', 'one line for goals')
+    pg.fill('#add-home', 'Send slides'); pg.press('#add-home', 'Enter'); pg.wait_for_timeout(200)
+    check(any(x['title'] == 'Send slides' and x['date'] == T(pg) for x in recs(pg, 'task')) and 'Send slides' in pg.inner_text('#home-today') and ev(pg, '() => document.activeElement.id') == 'add-home', 'add from Home, still typing')
     td = pg.inner_text('#home-today')
     check('Old reply' in td and 'Due ' in td and 'Chapter 3' in td and 'Walk' in td and td.index('Old reply') < td.index('Chapter 3'), td)
     soon = pg.inner_text('#coming-up')
@@ -241,8 +267,8 @@ def _(pg, ctx):
     pg.click('.sheet .btn.primary'); sheet_closed(pg)
     check(recs(pg, 'event')[0]['end'] == '12:30', 'end time not saved')
     ev(pg, "async () => { for (const [a,b] of [['13:00','14:00'],['14:30','15:30'],['16:00','17:00']]) await put({type:'event', title:'M'+a, date:today(), time:a, end:b}); }")
-    go(pg, 'home')
-    check('steady climb until 5:00 PM' in pg.inner_text('.headline'), pg.inner_text('.headline'))
+    go(pg, 'home'); open_more(pg)
+    check('steady climb until 5:00 PM' in pg.inner_text('#day-line'), pg.inner_text('#day-line'))
 
 @test('Tasks', 'Add, tick, undo and see done tasks fold away')
 def _(pg, ctx):
@@ -334,6 +360,7 @@ def _(pg, ctx):
     go(pg, 'calendar', T(pg))
     check('Ask about the prior' not in pg.inner_text('.agenda'), 'still on today')
     go(pg, 'home')
+    open_more(pg)
     check('Ask about the prior' in pg.inner_text('#coming-up') and 'A note for tomorrow' in pg.inner_text('#coming-up'), 'Home should mention it')
     pg.click('#coming-up .soon-row:has-text("Ask about the prior")'); pg.wait_for_selector('#note-title')
     check(pg.input_value('#note-title') == 'Ask about the prior', 'opens the note')
@@ -391,7 +418,7 @@ def _(pg, ctx):
 @test('Goals', 'Home invites a first goal; only its name is needed; it opens straight to a first step, which ties to it; Mark done, with Undo')
 def _(pg, ctx):
     open_app(pg, '')
-    pg.click('#heading [data-action=goal-new]'); pg.wait_for_selector('.sheet input[name=title]')
+    pg.click('#goal-pulse'); pg.wait_for_selector('.sheet input[name=title]')
     check(pg.inner_text('.sheet').count('(optional)') == 3, 'only the first question should be needed')
     pg.fill('.sheet input[name=title]', 'Finish Paper 2'); pg.fill('.sheet textarea[name=why]', 'Get it out before the conference')
     pg.click('.sheet .chip:has-text("In a month")')
@@ -463,16 +490,18 @@ def _(pg, ctx):
       await put({type:'task', title:'Gym', date:addDays(t,-3), done:true, doneDate:addDays(t,-3), goalId:b.id});
       await put({type:'task', title:'Gym again', date:addDays(t,1), done:false, goalId:b.id});
       for (let i = 1; i <= 3; i++) await put({type:'task', title:'Misc'+i, date:addDays(t,-i), done:true, doneDate:addDays(t,-i)}); }""")
-    pg.wait_for_timeout(150)
+    pg.wait_for_timeout(150); open_more(pg)
     line = pg.inner_text('#heading-line')
     check(line.startswith('At this pace “Paper 2” lands') and 'deadline' in line, line)
     check(count(pg, '.hbar i') == 3 and pg.locator('.hlist .hnum').all_inner_texts() == ['2', '1', '3'], pg.inner_text('#heading'))
     check('Behind' in pg.inner_text('.hrow-goal:has-text("Paper 2")') and 'On track' in pg.inner_text('.hrow-goal:has-text("Get fit")'), pg.inner_text('#heading'))
-    fx = pg.inner_text('#fixes')
-    check('“Paper 2” is behind' in fx and 'about 9 steps a week' in fx and 'Open goal' in fx, fx)
-    check(pg.locator('.brief > section').first.get_attribute('id') == 'heading', 'heading comes first on Home')
-    pg.click('.hrow-goal:has-text("Paper 2")'); pg.wait_for_selector('.gstate.big')
+    check(pg.inner_text('#goal-pulse') == 'Paper 2 is behind', 'Home names the goal that needs you, in one line')
+    check('Paper 2' not in all_fixes(pg), 'without AI, no card that only repeats the goal line')
+    open_more(pg); pg.click('.hrow-goal:has-text("Paper 2")'); pg.wait_for_selector('.gstate.big')
     check('To make the date, about 9 steps a week; lately 0.5.' in pg.inner_text('.sheet'), pg.inner_text('.sheet'))
+    ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
+    pg.click('#goal-pulse'); pg.wait_for_selector('.gstate.big')
+    check(pg.inner_text('.sheet-head h2') == 'Paper 2', 'the goal line opens that goal')
 
 @test('Heading', 'Fixes: a stalled goal gets its next step put on tomorrow in one tap, with Undo; a task moved again and again opens; Not now hides a fix for a week')
 def _(pg, ctx):
@@ -482,22 +511,24 @@ def _(pg, ctx):
       await put({id:'l3', type:'task', title:'Lesson 3', date:'', done:false, goalId:g.id});
       await put({type:'task', title:'Lesson 2', date:addDays(t,-14), done:true, doneDate:addDays(t,-14), goalId:g.id});
       await put({id:'tx', type:'task', title:'Tax forms', date:addDays(t,-1), done:false, moved:4}); }""")
-    pg.wait_for_timeout(150)
+    pg.wait_for_timeout(150); open_more(pg)
     check(pg.inner_text('#heading-line') == '“Learn Spanish” hasn’t moved in 14 days.', pg.inner_text('#heading-line'))
-    fx = pg.inner_text('#fixes')
-    check('Get “Learn Spanish” moving' in fx and 'Put “Lesson 3” on tomorrow?' in fx and '“Tax forms” keeps getting moved' in fx, fx)
+    check(pg.inner_text('#goal-pulse') == 'Learn Spanish: nothing in 14 days', pg.inner_text('#goal-pulse'))
+    fx = all_fixes(pg)
+    check('Get “Learn Spanish” moving' in fx and 'Put “Lesson 3” on tomorrow?' in fx and '“Tax forms” keeps getting moved' in fx and count(pg, '.fix-card') == 1, fx)
+    show_fix(pg, '.fix-card[data-fix^="stall-"]')
     pg.click('.fix-card[data-fix^="stall-"] [data-action=fix-apply]'); pg.wait_for_timeout(300)
     check(ev(pg, "() => get('l3').date") == add_days(pg, 1) and 'is on tomorrow' in pg.inner_text('#toast'), 'applied')
     check(count(pg, '.fix-card[data-fix^="stall-"]') == 0, 'a scheduled step is not a stall to fix')
     pg.click('#toast-action'); pg.wait_for_timeout(300)
     check(ev(pg, "() => get('l3').date") == '' and count(pg, '.fix-card[data-fix^="stall-"]') == 1, 'undo')
-    pg.click('.fix-card[data-fix^="split-"] [data-action=fix-apply]'); pg.wait_for_selector('.sheet input[name=title]')
+    show_fix(pg, '.fix-card[data-fix^="split-"]'); pg.click('.fix-card[data-fix^="split-"] [data-action=fix-apply]'); pg.wait_for_selector('.sheet input[name=title]')
     check(pg.input_value('.sheet input[name=title]') == 'Tax forms', 'without AI it opens the task')
     ev(pg, '() => LB.closeSheet()'); sheet_closed(pg)
-    pg.click('.fix-card[data-fix^="split-"] [data-action=fix-dismiss]'); pg.wait_for_timeout(250)
-    check(count(pg, '.fix-card[data-fix^="split-"]') == 0 and ev(pg, "() => S.settings.fixSnooze['split-tx']") == add_days(pg, 7), 'Not now')
+    show_fix(pg, '.fix-card[data-fix^="split-"]'); pg.click('.fix-card[data-fix^="split-"] [data-action=fix-dismiss]'); pg.wait_for_timeout(250)
+    check('Tax forms' not in all_fixes(pg) and ev(pg, "() => S.settings.fixSnooze['split-tx']") == add_days(pg, 7), 'Not now')
     reload(pg); pg.wait_for_timeout(200)
-    check(count(pg, '.fix-card[data-fix^="split-"]') == 0 and count(pg, '.fix-card[data-fix^="stall-"]') == 1, 'snooze kept after reload')
+    check('Tax forms' not in all_fixes(pg) and count(pg, '.fix-card[data-fix^="stall-"]') == 1, 'snooze kept after reload')
 
 @test('Heading', 'Fixes: a day fuller than usual offers to move the newest loose tasks to later this week; tasks tied to goals stay; Undo')
 def _(pg, ctx):
@@ -542,7 +573,7 @@ def _(pg, ctx):
       await put({id:'tA', type:'task', title:'Write paper intro', date:t, done:false}); await put({id:'tB', type:'task', title:'Paper figures', date:'', done:false});
       await put({id:'tC', type:'task', title:'Buy milk', date:'', done:false}); await put({id:'tD', type:'task', title:'Old tied one', date:'', done:false, goalId:a.id}); return [a.id, b.id]; }""")
     ai_setup(pg, 'glink'); pg.wait_for_timeout(150)
-    fx = pg.inner_text('.fix-card[data-fix^="link-"]')
+    show_fix(pg, '.fix-card[data-fix^="link-"]'); fx = pg.inner_text('.fix-card[data-fix^="link-"]')
     check('3 open tasks aren’t tied to a goal' in fx and '✦ Tie to goals' in fx, fx)
     AI_LOG.clear(); pg.click('.fix-card[data-fix^="link-"] [data-action=fix-apply]'); pg.wait_for_selector('#rev-list, #tool-error, #rev-empty', timeout=10000)
     user = posts()[0]['body']['messages'][-1]['content']
@@ -774,8 +805,9 @@ def _(pg, ctx):
     check(recs(pg, 'task')[0]['date'] == add_days(pg, -3), 'nothing should change by itself')
     go(pg, 'home')
     check('Supervisor call at 11' in pg.inner_text('#home-line'), 'today line')
-    need = pg.inner_text('#fixes')
+    need = all_fixes(pg)
     check('What to do with 4 overdue tasks' in need, need)
+    show_fix(pg, 'What to do with')
     pg.click('.bi-title:has-text("What to do with")'); pg.wait_for_selector('#rev-list')
     check('Your AI prepared this' in pg.inner_text('.sheet'), 'says it was prepared earlier')
     pg.click('#rev-apply'); sheet_closed(pg); pg.wait_for_timeout(300)
@@ -813,11 +845,11 @@ def _(pg, ctx):
     titles = [n['title'] for n in recs(pg, 'note')]
     check(any(x.startswith('Look back · ') for x in titles), titles)
     go(pg, 'home')
-    need = pg.inner_text('#fixes')
+    need = all_fixes(pg)
     check('Your weekly look back is ready' in need and 'A plan for this week' in need, need)
-    pg.click('.bi-title:has-text("A plan for this week")'); pg.wait_for_selector('#rev-list')
+    show_fix(pg, 'A plan for this week'); pg.click('.bi-title:has-text("A plan for this week")'); pg.wait_for_selector('#rev-list')
     pg.click('.sheet [data-action=pending-dismiss]'); sheet_closed(pg); pg.wait_for_timeout(200)
-    check('A plan for this week' not in pg.inner_text('.brief'), 'Not now should clear it')
+    check('A plan for this week' not in all_fixes(pg), 'Not now should clear it')
 
 @test('Automatic', 'Settings warns when the key is not kept, and shows a failed run plainly')
 def _(pg, ctx):
