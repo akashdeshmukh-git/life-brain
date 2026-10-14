@@ -5,6 +5,13 @@ function registerSW() {
   navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => { LB.swState = 'ready'; document.documentElement.dataset.sw = 'ready'; if (route.name === 'settings') render(); })
     .catch((e) => { console.warn('Service worker failed', e); LB.swState = 'error'; });
 }
+/* "#add" (the Add shortcut on the home-screen icon) opens the + sheet straight away, ready to type. */
+function openAddFromLink() {
+  if (location.hash !== '#add') return false;
+  try { history.replaceState(null, '', '#' + route.name); } catch (_) {}
+  A['quick-add']({ dataset: {} });
+  return true;
+}
 async function boot() {
   await dbInit();
   applyTheme();
@@ -15,7 +22,8 @@ async function boot() {
   render(false);
   if (moved) toast(`Brought over ${plural(moved, 'item')} from the old version`);
   if (!S.settings.introSeen && !window.LB_NO_INTRO) { A.intro(); saveSettings({ introSeen: true }).catch(() => {}); } // once, so nobody starts lost
-  window.addEventListener('hashchange', () => { const r = parseHash(); if (r.name !== route.name || r.sub !== route.sub) { Object.assign(route, r); render(true); } });
+  else openAddFromLink();
+  window.addEventListener('hashchange', () => { if (openAddFromLink()) return; const r = parseHash(); if (r.name !== route.name || r.sub !== route.sub) { Object.assign(route, r); render(true); } });
   /* Past midnight, "today" changes: redraw when the app comes back. */
   let day = today();
   document.addEventListener('visibilitychange', () => { if (!document.hidden && today() !== day) { day = today(); render(false); } });

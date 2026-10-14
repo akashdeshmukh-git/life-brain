@@ -62,7 +62,7 @@ Paste any API key in Settings → AI. The app recognises the service (OpenRouter
 
 ## Install
 
-Open https://akashdeshmukh-git.github.io/life-brain/ in Chrome on Android, then menu (⋮) → **Install app**. It works offline after the first open.
+Open https://akashdeshmukh-git.github.io/life-brain/ in Chrome on Android, then menu (⋮) → **Install app** (or **Add to Home screen**). Open it from the home-screen icon from then on: it runs full screen with no address bar, works offline, and stays upright. Long-press the icon for **Add** (opens + ready to type) or **Today**.
 
 ## Rebuild and test
 
